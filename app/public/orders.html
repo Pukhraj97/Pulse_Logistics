@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Order history | Pulse Logistics</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #172b4d;
+      background: #0b1329;
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      position: relative;
+      isolation: isolate;
+    }
+    .background {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background:
+        linear-gradient(135deg, rgba(9,30,66,.86), rgba(11,19,41,.9)),
+        url('/70b82787-b394-4168-9124-f1244fcbb843.png') center / cover no-repeat;
+    }
+    header {
+      align-self: stretch;
+      width: 100%;
+      max-width: none;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 40px 16px 16px;
+      margin: 0;
+    }
+    .brand-title {
+      position: absolute;
+      left: 16px;
+      color: #ffffff;
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      text-align: left;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    .nav { display: flex; align-items: center; }
+    .lang-switch {
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(8px);
+    }
+    .lang-btn {
+      border: none;
+      border-radius: 16px;
+      padding: 5px 12px;
+      background: transparent;
+      color: #ffffff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .lang-btn.active {
+      background: #ffffff;
+      color: #0052cc;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    .panel { width: 100%; min-width: 0; padding: 24px 20px; border: 1px solid rgba(255,255,255,.4); border-radius: 12px; background: rgba(255,255,255,.99); box-shadow: 0 8px 24px rgba(9,30,66,.15); }
+    h1 { margin: 0 0 16px; color: #091e42; font-size: 1.25rem; font-weight: 700; }
+    .intro { margin: 0 0 24px; color: #5e6c84; }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; color: #5e6c84; font-size: .9rem; }
+    button { padding: 9px 14px; border: 1px solid #dfe1e6; border-radius: 6px; background: white; color: #172b4d; font: inherit; font-weight: 700; cursor: pointer; }
+    button:hover { background: #f4f5f7; }
+    .order-list { display: grid; gap: 12px; }
+    .order-card { min-width: 0; padding: 18px; border: 1px solid #dfe1e6; border-radius: 8px; }
+    .order-top { display: flex; justify-content: space-between; gap: 16px; }
+    .customer { margin: 0; color: #091e42; font-size: 1.05rem; font-weight: 700; overflow-wrap: anywhere; }
+    .order-date, .order-id { margin: 5px 0 0; color: #6b778c; font-size: .82rem; overflow-wrap: anywhere; }
+    .order-total { color: #006644; font-size: 1.1rem; font-weight: 800; white-space: nowrap; }
+    .order-meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 14px; font-size: .9rem; }
+    .order-items { margin: 10px 0 0; padding-left: 20px; color: #5e6c84; font-size: .9rem; }
+    .status { display: inline-block; margin-top: 10px; padding: 4px 8px; border-radius: 999px; background: #e3fcef; color: #006644; font-size: .78rem; font-weight: 700; text-transform: capitalize; }
+    .message { padding: 20px; border-radius: 8px; background: #f4f5f7; color: #5e6c84; text-align: center; }
+    .error { background: #ffebe6; color: #bf2600; }
+    main { width: min(480px, calc(100% - 32px)); margin: 16px auto 24px; }
+    @media (max-width: 480px) {
+      header {
+        width: 100%;
+        padding: 32px 12px 12px;
+      }
+      .brand-title { left: 12px; }
+      .lang-btn { padding: 5px 8px; }
+      .panel { padding: 16px 14px; }
+      .order-top { flex-direction: column; gap: 8px; }
+      .order-card { padding: 16px; }
+      .order-meta { gap: 8px 12px; }
+      .order-items { padding-left: 18px; }
+    }
+    @media (max-width: 380px) {
+      header { padding-top: 28px; }
+      .brand-title { font-size: 22px; }
+      .lang-btn { padding: 5px 7px; }
+      .panel { padding: 14px 12px; }
+      .toolbar { align-items: flex-start; flex-wrap: wrap; }
+      .order-card { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="background" aria-hidden="true"></div>
+  <header>
+    <div class="brand-title">PULSE LOGISTICS</div>
+    <nav class="nav" aria-label="Main navigation">
+      <span class="lang-switch">
+        <button class="lang-btn" id="lang-en" type="button" aria-pressed="true">EN</button>
+        <button class="lang-btn active" id="lang-de" type="button" aria-pressed="false">DE</button>
+      </span>
+    </nav>
+  </header>
+  <main>
+    <section class="panel" aria-labelledby="page-title">
+      <h1 id="page-title">Order history</h1>
+      <p class="intro" id="intro">Pickup orders saved on this device.</p>
+      <div class="toolbar">
+        <span id="order-count" aria-live="polite"></span>
+        <button id="refresh" type="button">Refresh</button>
+      </div>
+      <section id="order-list" class="order-list" aria-live="polite">
+        <p class="message" id="loading">Loading orders...</p>
+      </section>
+    </section>
+  </main>
+  <script>
+    const copy = {
+      en: {
+        title: 'Order history', intro: 'Pickup orders saved on this device.',
+        refresh: 'Refresh', loading: 'Loading orders...',
+        failed: "Couldn't load orders. Please try again.", empty: 'No pickup orders have been saved yet.',
+        count: (total) => `${total} ${total === 1 ? 'order' : 'orders'}`,
+        pickup: 'Pickup', total: 'Refund', reference: 'Reference', itemNames: {
+          pet: 'PET plastic bottle', beer: 'Glass beer bottle', water: 'Glass water/juice bottle', can: 'Aluminum can',
+        },
+        statuses: { confirmed: 'confirmed', cancelled: 'cancelled' },
+      },
+      de: {
+        title: 'Auftragsverlauf', intro: 'Auf diesem Gerät gespeicherte Abholungen.',
+        refresh: 'Aktualisieren', loading: 'Aufträge werden geladen...',
+        failed: 'Aufträge konnten nicht geladen werden. Bitte erneut versuchen.',
+        empty: 'Es wurden noch keine Abholungen gespeichert.',
+        count: (total) => `${total} ${total === 1 ? 'Auftrag' : 'Aufträge'}`,
+        pickup: 'Abholung', total: 'Erstattung', reference: 'Referenz', itemNames: {
+          pet: 'PET-Kunststoffflasche', beer: 'Bier-Glasflasche', water: 'Wasser-/Saftflasche', can: 'Aluminiumdose',
+        },
+        statuses: { confirmed: 'bestätigt', cancelled: 'storniert' },
+      },
+    };
+    const list = document.querySelector('#order-list');
+    let language = sessionStorage.getItem('appLang') === 'en' ? 'en' : 'de';
+
+    function element(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    function renderOrder(order, t) {
+      const card = element('article', 'order-card');
+      const top = element('div', 'order-top');
+      const summary = element('div');
+      summary.append(
+        element('h2', 'customer', order.customerName),
+        element('p', 'order-date', new Date(`${order.createdAt.replace(' ', 'T')}Z`).toLocaleString(language === 'de' ? 'de-DE' : 'en-GB')),
+        element('p', 'order-id', `${t.reference}: ${order.id}`)
+      );
+      top.append(summary, element('strong', 'order-total', `€${order.totalRefund}`));
+      const meta = element('div', 'order-meta');
+      meta.append(element('span', '', `${t.pickup}: ${order.pickupTimeSlot.replace('-', '–')}`));
+      meta.append(element('span', 'status', t.statuses[order.status] || order.status));
+      const items = element('ul', 'order-items');
+      order.items.forEach((item) => {
+        const name = t.itemNames[item.type] || item.type;
+        items.append(element('li', '', `${item.quantity} × ${name} (€${Number(item.unitRefund).toFixed(2)} each)`));
+      });
+      card.append(top, meta, items);
+      return card;
+    }
+
+    async function loadOrders() {
+      const t = copy[language];
+      list.replaceChildren(element('p', 'message', t.loading));
+      document.querySelector('#order-count').textContent = '';
+      try {
+        const response = await fetch('/api/orders');
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || t.failed);
+        document.querySelector('#order-count').textContent = t.count(result.data.length);
+        if (!result.data.length) {
+          list.replaceChildren(element('p', 'message', t.empty));
+          return;
+        }
+        list.replaceChildren(...result.data.map((order) => renderOrder(order, t)));
+      } catch {
+        list.replaceChildren(element('p', 'message error', t.failed));
+      }
+    }
+
+    function setLanguage(nextLanguage) {
+      language = nextLanguage;
+      sessionStorage.setItem('appLang', language);
+      const t = copy[language];
+      document.documentElement.lang = language;
+      document.querySelector('#page-title').textContent = t.title;
+      document.querySelector('#intro').textContent = t.intro;
+      document.querySelector('#refresh').textContent = t.refresh;
+      document.querySelector('#lang-en').setAttribute('aria-pressed', String(language === 'en'));
+      document.querySelector('#lang-de').setAttribute('aria-pressed', String(language === 'de'));
+      document.querySelector('#lang-en').classList.toggle('active', language === 'en');
+      document.querySelector('#lang-de').classList.toggle('active', language === 'de');
+      loadOrders();
+    }
+
+    document.querySelector('#refresh').addEventListener('click', loadOrders);
+    document.querySelector('#lang-en').addEventListener('click', () => setLanguage('en'));
+    document.querySelector('#lang-de').addEventListener('click', () => setLanguage('de'));
+    setLanguage(language);
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "pulse-logistics",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pulse Logistics bottle pickup form, API, and local database.",
+  "scripts": {
+    "start": "node app/server.js",
+    "test": "node scripts/run-playwright.js",
+    "test:ui": "node scripts/run-playwright.js --ui",
+    "test:report": "playwright show-report"
+  },
+  "dependencies": {
+    "sql.js": "^1.15.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}

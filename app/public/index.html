@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulse Logistics - Hyper-Local Pfand & Data Engine</title>
+    <style>
+        :root {
+            --primary: #0052cc;
+            --primary-hover: #003d99;
+            --dark: #091e42;
+            --text: #172b4d;
+            --light-bg: #f4f5f7;
+            --white: #ffffff;
+            --border: #dfe1e6;
+            --success: #36b37e;
+            --success-bg: #e3fcef;
+            --note-bg: #deebff;
+            --note-text: #0747a6;
+            --danger: #de350b;
+            --shadow: 0 8px 24px rgba(9, 30, 66, 0.15);
+            --radius: 12px;
+        }
+
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+        body {
+            margin: 0;
+            padding: 0;
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            background-color: #0b1329;
+            position: relative;
+            isolation: isolate;
+        }
+
+        /* Responsive Background Image Layer */
+        .bg-hero {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            background-image: url('/70b82787-b394-4168-9124-f1244fcbb843.png');
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            z-index: -2;
+        }
+
+        /* Dark Frosted Glass Overlay for readability across Mobile & Desktop */
+        .bg-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(9, 30, 66, 0.82) 0%, rgba(11, 19, 41, 0.88) 100%);
+            z-index: -1;
+        }
+
+        /* Header Bar */
+        header {
+            align-self: stretch;
+            width: 100%;
+            max-width: none;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 40px 16px 16px;
+            margin: 0;
+        }
+        .brand-title {
+            position: absolute;
+            left: 16px;
+            font-size: 30px;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: -0.3px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            text-align: left;
+        }
+        .lang-switch {
+            display: flex;
+            gap: 4px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+            padding: 4px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .lang-btn {
+            border: none;
+            background: transparent;
+            padding: 5px 12px;
+            border-radius: 16px;
+            font-weight: 700;
+            font-size: 0.75rem;
+            cursor: pointer;
+            color: #ffffff;
+            transition: all 0.2s ease;
+        }
+        .lang-btn.active {
+            background: var(--white);
+            color: var(--primary);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        /* Main Container Card */
+        .card {
+            align-self: flex-end;
+            width: min(480px, calc(100% - 32px));
+            max-width: 480px;
+            background: rgba(255, 255, 255, 0.99);
+            backdrop-filter: blur(12px);
+            border-radius: var(--radius);
+            padding: 24px 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            margin: 10px 16px 30px 16px;
+        }
+
+        #step2 {
+            padding: 32px 24px 28px;
+        }
+
+        h2 {
+            font-size: 1.25rem;
+            margin-top: 0;
+            margin-bottom: 16px;
+            color: var(--dark);
+            font-weight: 700;
+        }
+
+        .form-group { margin-bottom: 16px; }
+        label { display: block; margin-bottom: 6px; font-size: 0.85rem; font-weight: 600; color: #5e6c84; }
+
+        select, input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.95rem;
+            background: var(--white);
+            color: var(--text);
+        }
+        select {
+            appearance: none;
+            padding-right: 40px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23172b4d' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            background-size: 12px 8px;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0,82,204,0.15);
+        }
+
+        .quantity-control-wrapper { display: flex; gap: 8px; align-items: stretch; margin-bottom: 16px; }
+        .qty-box { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 6px; width: 130px; min-width: 130px; background: var(--light-bg); }
+        .qty-btn { border: none; background: transparent; padding: 10px 14px; font-size: 1.2rem; font-weight: 700; color: var(--primary); cursor: pointer; flex: 1; }
+        .qty-val { width: 45px; text-align: center; border: none; font-weight: 700; font-size: 1rem; background: transparent; }
+
+        .add-btn { flex: 1; min-width: 0; background: var(--primary); color: var(--white); border: none; padding: 12px; border-radius: 6px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+        .add-btn:hover { background: var(--primary-hover); }
+
+        /* Cart Items Display */
+        .cart-list { max-height: 180px; overflow-y: auto; margin-bottom: 16px; border-top: 1px solid var(--border); }
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f4f5f7; font-size: 0.9rem; }
+        .item-info { display: flex; flex-direction: column; }
+        .item-title { font-weight: 600; }
+        .item-sub { font-size: 0.75rem; color: #6b778c; }
+        .del-btn { color: var(--danger); background: none; border: none; padding: 4px 8px; cursor: pointer; font-size: 1.1rem; }
+
+        /* Summary Box */
+        .total-box { background: var(--success-bg); color: #006644; border-radius: 6px; padding: 14px; display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 16px; }
+        .total-amount { font-size: 1.3rem; }
+
+        /* Action Buttons */
+        .btn { display: inline-block; width: 100%; background: var(--primary); color: var(--white); border: none; padding: 14px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; text-align: center; cursor: pointer; transition: background 0.2s; }
+        .btn:hover { background: var(--primary-hover); }
+        .btn-sec { background: var(--light-bg); color: var(--text); border: 1px solid var(--border); }
+        .btn-sec:hover { background: #ebecf0; }
+        .btn-group { display: flex; gap: 8px; margin-top: 12px; }
+
+        .ui-note { background: var(--note-bg); color: var(--danger); padding: 10px; border-radius: 6px; font-size: 0.8rem; line-height: 1.4; margin-top: 6px; text-transform: uppercase; font-weight: 700; }
+        .validation-message { color: var(--danger); font-size: 0.85rem; font-weight: 600; margin: 10px 0 0; }
+
+        .hidden { display: none !important; }
+
+        @media (min-width: 761px) and (max-width: 1024px) {
+            .bg-hero { background-position: 58% center; }
+        }
+
+        @media (min-width: 1025px) and (max-width: 1200px) {
+            .bg-hero { background-position: 90% center; }
+        }
+
+        @media (min-width: 1201px) and (max-width: 1440px) {
+            .bg-hero { background-position: 53% center; }
+        }
+
+        /* Responsive layout for narrow phones */
+        @media (max-width: 480px) {
+            header {
+                width: 100%;
+                padding: 32px 12px 12px;
+            }
+            .brand-title {
+                left: 12px;
+            }
+            .lang-btn {
+                padding: 5px 8px;
+            }
+            .card {
+                padding: 16px 14px;
+                margin: 5px 12px 20px;
+            }
+            #step2 { padding: 30px 18px 20px; }
+            .quantity-control-wrapper { gap: 6px; }
+            .qty-box { flex: 0 0 96px; width: 96px; }
+            .qty-btn { padding: 10px 8px; }
+            .qty-val { width: 32px; }
+            .add-btn { min-width: 0; padding: 12px 8px; }
+            .total-box { padding: 12px; }
+        }
+
+        @media (max-width: 380px) {
+            header { padding-top: 28px; }
+            .brand-title { font-size: 22px; }
+            .card { padding: 14px 12px; }
+            #step2 { padding: 28px 16px 18px; }
+            .lang-btn { padding: 5px 7px; }
+        }
+
+        @media (min-width: 360px) and (max-width: 480px) {
+            .card {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                max-height: calc(100vh - 24px);
+                margin: 0;
+                overflow-y: auto;
+                transform: translate(-50%, -50%);
+            }
+        }
+
+        @media (max-width: 480px) {
+            #step2 {
+                position: fixed;
+                top: calc(92px + env(safe-area-inset-top));
+                left: 50%;
+                max-height: calc(100vh - 108px - env(safe-area-inset-top));
+                max-height: calc(100dvh - 108px - env(safe-area-inset-top));
+                margin: 0;
+                overflow-y: auto;
+                transform: translateX(-50%);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Background Image & Gradient Layer -->
+    <div class="bg-hero"></div>
+    <div class="bg-overlay"></div>
+
+    <header>
+        <div class="brand-title">PULSE LOGISTICS</div>
+        <div class="lang-switch">
+            <button class="lang-btn" id="btn-en" onclick="setLanguage('en')">EN</button>
+            <button class="lang-btn active" id="btn-de" onclick="setLanguage('de')">DE</button>
+        </div>
+    </header>
+
+    <!-- STEP 1: BOTTLE SELECTION -->
+    <div class="card" id="step1">
+        <h2 id="t-step1-title">1. Bottle Selection</h2>
+
+        <div class="form-group">
+            <label id="t-label-type">Select Bottle Category</label>
+            <select id="bottleType">
+                <option value="0.25" data-key="pet">PET Plastic Bottle (€0.25)</option>
+                <option value="0.08" data-key="beer">Glass Beer Bottle (€0.08)</option>
+                <option value="0.15" data-key="water">Glass Water/Juice Bottle (€0.15)</option>
+                <option value="0.25" data-key="can">Aluminum Can (€0.25)</option>
+            </select>
+        </div>
+
+        <div class="quantity-control-wrapper">
+            <div class="qty-box">
+                <button class="qty-btn" onclick="adjustQty(-1)">-</button>
+                <input type="text" id="qty" class="qty-val" value="1" readonly>
+                <button class="qty-btn" onclick="adjustQty(1)">+</button>
+            </div>
+            <button class="add-btn" id="t-btn-add" onclick="addItem()">Add to Order</button>
+        </div>
+
+        <div class="cart-list" id="itemList"></div>
+
+        <div class="total-box">
+            <span id="t-total-label">Total Refund:</span>
+            <span class="total-amount">€<span id="totalAmount">0.00</span></span>
+        </div>
+
+        <button class="btn" id="t-btn-proceed" onclick="goToStep(2)">Proceed to Address →</button>
+        <p class="validation-message hidden" id="t-cart-validation" role="alert"></p>
+    </div>
+
+    <!-- STEP 2: ADDRESS FORM -->
+    <div class="card hidden" id="step2">
+        <h2 id="t-step2-title">2. Delivery & Address</h2>
+        <form id="addressForm" onsubmit="submitOrder(event)">
+            <div class="form-group">
+                <label id="t-lbl-fname" for="fname">First Name *</label>
+                <input type="text" id="fname" required minlength="1" maxlength="100" autocomplete="given-name" placeholder="e.g. Max">
+            </div>
+            <div class="form-group">
+                <label id="t-lbl-lname" for="lname">Last Name *</label>
+                <input type="text" id="lname" required minlength="1" maxlength="100" autocomplete="family-name" placeholder="e.g. Mustermann">
+            </div>
+            <div class="form-group">
+                <label id="t-lbl-street" for="street">Street & House Number *</label>
+                <input type="text" id="street" required minlength="1" maxlength="200" autocomplete="street-address" placeholder="e.g. Hauptstraße 12">
+            </div>
+            <div class="form-group">
+                <label id="t-lbl-zip" for="zip">ZIP Code (PLZ) *</label>
+                <input type="text" id="zip" required minlength="5" maxlength="5" autocomplete="postal-code" inputmode="numeric" pattern="[0-9]{5}" title="Enter a five-digit ZIP code" placeholder="e.g. 10115">
+            </div>
+            <div class="form-group">
+                <label id="t-lbl-phone" for="phone">Mobile Phone Number *</label>
+                <input type="tel" id="phone" required minlength="6" maxlength="32" autocomplete="tel" inputmode="tel" pattern="(?:\+|\(|\)|\.| |[0-9]){6,32}" title="Use 6–32 digits, spaces, and common phone symbols" placeholder="+49 151 12345678">
+                <div class="ui-note" id="t-phone-note">
+                    <strong>Note:</strong> Your phone number is only required so our courier can contact you if they encounter difficulty finding your entrance or door.
+                </div>
+            </div>
+            <div class="form-group">
+                <label id="t-lbl-time-slot" for="timeSlot">Pickup Time Slot *</label>
+                <select id="timeSlot" required>
+                    <option value="" data-key="slotPlaceholder">Select a pickup time</option>
+                    <option value="10:00-11:00">10:00–11:00</option>
+                    <option value="11:00-12:00">11:00–12:00</option>
+                    <option value="12:00-13:00">12:00–13:00</option>
+                    <option value="13:00-14:00">13:00–14:00</option>
+                    <option value="14:00-15:00">14:00–15:00</option>
+                    <option value="15:00-16:00">15:00–16:00</option>
+                    <option value="16:00-17:00">16:00–17:00</option>
+                    <option value="17:00-18:00">17:00–18:00</option>
+                    <option value="18:00-19:00">18:00–19:00</option>
+                </select>
+            </div>
+
+            <div class="btn-group">
+                <button type="button" class="btn btn-sec" id="t-btn-back" onclick="goToStep(1)">← Back</button>
+                <button type="submit" class="btn" id="t-btn-submit">Confirm Pickup</button>
+            </div>
+            <p class="validation-message hidden" id="order-error" role="alert"></p>
+        </form>
+    </div>
+
+    <!-- STEP 3: CONFIRMATION -->
+    <div class="card hidden" id="step3">
+        <h2 style="color: var(--success);" id="t-step3-title">Order Confirmed!</h2>
+        <p id="t-step3-msg">Thank you. Your doorstep Pfand pickup request has been scheduled. A cargo bike courier will arrive during your selected window.</p>
+        <button class="btn" id="t-btn-reset" onclick="resetApp()">Schedule Another Pickup</button>
+    </div>
+
+<script>
+    const translations = {
+        en: {
+            step1Title: "1. Bottle Selection",
+            labelType: "Select Bottle Category",
+            btnAdd: "Add to Order",
+            totalLabel: "Total Refund:",
+            btnProceed: "Proceed to Address →",
+            cartRequired: "Please add at least one bottle before proceeding.",
+            step2Title: "2. Delivery & Address",
+            lblFname: "First Name *",
+            lblLname: "Last Name *",
+            lblStreet: "Street & House Number *",
+            lblZip: "ZIP Code (PLZ) *",
+            lblPhone: "Mobile Phone Number *",
+            phoneNote: "<strong>Note:</strong> Your phone number is only required so our courier can contact you if they encounter difficulty finding your entrance or door.",
+            lblTimeSlot: "Pickup Time Slot *",
+            slotPlaceholder: "Select a pickup time",
+            pickupTime: "Selected pickup time",
+            btnBack: "← Back",
+            btnSubmit: "Confirm Pickup",
+            btnSaving: "Saving pickup...",
+            orderFailed: "We couldn't save your pickup. Please try again.",
+            orderNumber: "Order reference",
+            fieldRequired: "This field is required.",
+            nameInvalid: "Use letters, spaces, apostrophes, or hyphens only.",
+            streetInvalid: "Enter a valid street address without control characters.",
+            phoneInvalid: "Enter at least six digits and use only common phone symbols.",
+            quantityLimit: "A maximum of 1,000 bottles per category can be ordered.",
+            removeItem: "Remove item",
+            step3Title: "Order Confirmed!",
+            step3Msg: "Thank you. Your doorstep Pfand pickup request has been scheduled. A cargo bike courier will arrive during your selected window.",
+            btnReset: "Schedule Another Pickup",
+            pet: "PET Plastic Bottle (€0.25)",
+            beer: "Glass Beer Bottle (€0.08)",
+            water: "Glass Water/Juice Bottle (€0.15)",
+            can: "Aluminum Can (€0.25)"
+        },
+        de: {
+            step1Title: "1. Pfandflaschen Auswählen",
+            labelType: "Flaschenkategorie Wählen",
+            btnAdd: "Hinzufügen",
+            totalLabel: "Gesamtrückgabe:",
+            btnProceed: "Weiter zur Adresse →",
+            cartRequired: "Bitte fügen Sie mindestens eine Flasche hinzu, bevor Sie fortfahren.",
+            step2Title: "2. Abholadresse",
+            lblFname: "Vorname *",
+            lblLname: "Nachname *",
+            lblStreet: "Straße & Hausnummer *",
+            lblZip: "Postleitzahl (PLZ) *",
+            lblPhone: "Mobilnummer *",
+            phoneNote: "<strong>Hinweis:</strong> Ihre Telefonnummer wird nur genutzt, falls der Kurier Schwierigkeiten hat, Ihre Adresse oder Ihren Eingang zu finden.",
+            lblTimeSlot: "Abholzeit *",
+            slotPlaceholder: "Bitte Abholzeit auswählen",
+            pickupTime: "Ausgewählte Abholzeit",
+            btnBack: "← Zurück",
+            btnSubmit: "Abholung Bestätigen",
+            btnSaving: "Abholung wird gespeichert...",
+            orderFailed: "Die Abholung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
+            orderNumber: "Auftragsnummer",
+            fieldRequired: "Dieses Feld ist erforderlich.",
+            nameInvalid: "Verwenden Sie nur Buchstaben, Leerzeichen, Apostrophe oder Bindestriche.",
+            streetInvalid: "Geben Sie eine gültige Adresse ohne Steuerzeichen ein.",
+            phoneInvalid: "Geben Sie mindestens sechs Ziffern und nur übliche Telefonsymbole ein.",
+            quantityLimit: "Pro Kategorie können höchstens 1.000 Flaschen bestellt werden.",
+            removeItem: "Artikel entfernen",
+            step3Title: "Bestellung Bestätigt!",
+            step3Msg: "Vielen Dank. Ihre Pfandabholung wurde erfolgreich gebucht. Ein Lastenrad-Kurier wird zum gewählten Zeitpunkt bei Ihnen sein.",
+            btnReset: "Weitere Abholung Buchen",
+            pet: "Einweg PET-Flasche (€0.25)",
+            beer: "Bier-Glasflasche (€0.08)",
+            water: "Wasser-/Saft-Flasche (€0.15)",
+            can: "Getränkedose (€0.25)"
+        }
+    };
+
+    let currentLang = 'de';
+    const bottleRates = { pet: 0.25, beer: 0.08, water: 0.15, can: 0.25 };
+    const namePattern = /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u;
+    let cart = loadCart();
+    let selectedPickupTime = '';
+    let orderId = '';
+    let orderSubmissionKey = crypto.randomUUID();
+
+    function loadCart() {
+        try {
+            const storedCart = JSON.parse(sessionStorage.getItem('pfandCart') || '[]');
+            if (!Array.isArray(storedCart)) return [];
+            return storedCart
+                .filter(item => item && Object.hasOwn(bottleRates, item.key) &&
+                    Number.isInteger(item.qty) && item.qty > 0 && item.qty <= 1000)
+                .map(item => ({ id: crypto.randomUUID(), key: item.key, rate: bottleRates[item.key], qty: item.qty }));
+        } catch {
+            return [];
+        }
+    }
+
+    setLanguage(currentLang);
+
+    function setLanguage(lang) {
+        currentLang = lang;
+        sessionStorage.setItem('appLang', lang);
+
+        document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+        document.getElementById('btn-de').classList.toggle('active', lang === 'de');
+
+        const t = translations[lang];
+        document.getElementById('t-step1-title').innerText = t.step1Title;
+        document.getElementById('t-label-type').innerText = t.labelType;
+        document.getElementById('t-btn-add').innerText = t.btnAdd;
+        document.getElementById('t-total-label').innerText = t.totalLabel;
+        document.getElementById('t-btn-proceed').innerText = t.btnProceed;
+        document.getElementById('t-cart-validation').innerText = t.cartRequired;
+        document.getElementById('t-step2-title').innerText = t.step2Title;
+        document.getElementById('t-lbl-fname').innerText = t.lblFname;
+        document.getElementById('t-lbl-lname').innerText = t.lblLname;
+        document.getElementById('t-lbl-street').innerText = t.lblStreet;
+        document.getElementById('t-lbl-zip').innerText = t.lblZip;
+        document.getElementById('t-lbl-phone').innerText = t.lblPhone;
+        document.getElementById('t-phone-note').innerHTML = t.phoneNote;
+        document.getElementById('t-lbl-time-slot').innerText = t.lblTimeSlot;
+        document.getElementById('t-btn-back').innerText = t.btnBack;
+        document.getElementById('t-btn-submit').innerText = t.btnSubmit;
+        document.getElementById('t-step3-title').innerText = t.step3Title;
+        const confirmationMessage = selectedPickupTime
+            ? `${t.step3Msg} ${t.pickupTime}: ${selectedPickupTime.replace('-', '–')}. ${t.orderNumber}: ${orderId}.`
+            : t.step3Msg;
+        document.getElementById('t-step3-msg').innerText = confirmationMessage;
+        document.getElementById('t-btn-reset').innerText = t.btnReset;
+        const select = document.getElementById('bottleType');
+        Array.from(select.options).forEach(opt => {
+            const key = opt.getAttribute('data-key');
+            if (t[key]) opt.text = t[key];
+        });
+
+        const timeSlotPlaceholder = document.querySelector('#timeSlot option[data-key="slotPlaceholder"]');
+        timeSlotPlaceholder.text = t.slotPlaceholder;
+
+        renderCart();
+    }
+
+    function adjustQty(amount) {
+        let qtyInput = document.getElementById('qty');
+        let current = parseInt(qtyInput.value) + amount;
+        if (current > 0) qtyInput.value = current;
+    }
+
+    function mergeCartItem(items, newItem) {
+        const matchingItems = items.filter(item => item.key === newItem.key);
+        if (matchingItems.length === 0) return [...items, newItem];
+
+        const mergedItem = {
+            ...matchingItems[0],
+            qty: matchingItems.reduce((total, item) => total + item.qty, newItem.qty)
+        };
+        let inserted = false;
+
+        return items.reduce((mergedItems, item) => {
+            if (item.key !== newItem.key) {
+                mergedItems.push(item);
+            } else if (!inserted) {
+                mergedItems.push(mergedItem);
+                inserted = true;
+            }
+            return mergedItems;
+        }, []);
+    }
+
+    function addItem() {
+        let select = document.getElementById('bottleType');
+        let key = select.options[select.selectedIndex].getAttribute('data-key');
+        let rate = bottleRates[key];
+        let qty = parseInt(document.getElementById('qty').value);
+        const existingQuantity = cart
+            .filter(item => item.key === key)
+            .reduce((total, item) => total + item.qty, 0);
+        if (existingQuantity + qty > 1000) {
+            document.getElementById('t-cart-validation').innerText = translations[currentLang].quantityLimit;
+            document.getElementById('t-cart-validation').classList.remove('hidden');
+            return;
+        }
+
+        cart = mergeCartItem(cart, { id: crypto.randomUUID(), key, rate, qty });
+        saveAndRender();
+        document.getElementById('t-cart-validation').classList.add('hidden');
+        document.getElementById('qty').value = 1;
+    }
+
+    function deleteItem(id) {
+        cart = cart.filter(item => item.id !== id);
+        saveAndRender();
+    }
+
+    function saveAndRender() {
+        sessionStorage.setItem('pfandCart', JSON.stringify(cart));
+        renderCart();
+    }
+
+    function renderCart() {
+        let listContainer = document.getElementById('itemList');
+        listContainer.replaceChildren();
+        let total = 0;
+        const t = translations[currentLang];
+
+        cart.forEach(item => {
+            let itemTotal = item.rate * item.qty;
+            total += itemTotal;
+            const row = document.createElement('div');
+            row.className = 'item-row';
+            const info = document.createElement('div');
+            info.className = 'item-info';
+            const title = document.createElement('span');
+            title.className = 'item-title';
+            title.textContent = `${item.qty}x ${t[item.key]}`;
+            const unit = document.createElement('span');
+            unit.className = 'item-sub';
+            unit.textContent = `€${item.rate.toFixed(2)} / unit`;
+            info.append(title, unit);
+            const amount = document.createElement('strong');
+            amount.style.marginRight = '8px';
+            amount.textContent = `€${itemTotal.toFixed(2)}`;
+            const remove = document.createElement('button');
+            remove.className = 'del-btn';
+            remove.type = 'button';
+            remove.setAttribute('aria-label', t.removeItem);
+            remove.textContent = '✕';
+            remove.addEventListener('click', () => deleteItem(item.id));
+            const actions = document.createElement('div');
+            actions.append(amount, remove);
+            row.append(info, actions);
+            listContainer.append(row);
+        });
+        document.getElementById('totalAmount').innerText = total.toFixed(2);
+    }
+
+    function validateTextField(input) {
+        const value = input.value.trim();
+        let message = '';
+        if (!value) {
+            message = translations[currentLang].fieldRequired;
+        } else if ((input.id === 'fname' || input.id === 'lname') &&
+            (value.length > 100 || !namePattern.test(value.normalize('NFC')))) {
+            message = translations[currentLang].nameInvalid;
+        } else if (input.id === 'street' &&
+            (value.length > 200 || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(value))) {
+            message = translations[currentLang].streetInvalid;
+        }
+        input.setCustomValidity(message);
+        input.setAttribute('aria-invalid', String(Boolean(message)));
+    }
+
+    function validatePhoneField(input) {
+        const value = input.value.trim();
+        const digits = value.replace(/\D/g, '');
+        const message = value && (!/^[+0-9(). -]{6,32}$/.test(value) || digits.length < 6)
+            ? translations[currentLang].phoneInvalid
+            : '';
+        input.setCustomValidity(message);
+        input.setAttribute('aria-invalid', String(Boolean(message)));
+    }
+
+    ['fname', 'lname', 'street'].forEach(id => {
+        const input = document.getElementById(id);
+        input.addEventListener('input', () => validateTextField(input));
+        input.addEventListener('blur', () => validateTextField(input));
+    });
+    const phoneInput = document.getElementById('phone');
+    phoneInput.addEventListener('input', () => validatePhoneField(phoneInput));
+    phoneInput.addEventListener('blur', () => validatePhoneField(phoneInput));
+
+    function goToStep(step) {
+        if (step === 2 && cart.length === 0) {
+            document.getElementById('t-cart-validation').classList.remove('hidden');
+            return;
+        }
+
+        document.getElementById('t-cart-validation').classList.add('hidden');
+        document.getElementById('step1').classList.add('hidden');
+        document.getElementById('step2').classList.add('hidden');
+        document.getElementById('step3').classList.add('hidden');
+        document.getElementById('step' + step).classList.remove('hidden');
+    }
+
+    async function submitOrder(e) {
+        e.preventDefault();
+        selectedPickupTime = document.getElementById('timeSlot').value;
+        const submitButton = document.getElementById('t-btn-submit');
+        const errorMessage = document.getElementById('order-error');
+        const t = translations[currentLang];
+        errorMessage.classList.add('hidden');
+        submitButton.disabled = true;
+        submitButton.innerText = t.btnSaving;
+
+        try {
+            const form = document.getElementById('addressForm');
+            ['fname', 'lname', 'street'].forEach(id => validateTextField(document.getElementById(id)));
+            if (!form.reportValidity()) return;
+            const response = await fetch('/api/orders', {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    'Idempotency-Key': orderSubmissionKey
+                },
+                body: JSON.stringify({
+                    customer: {
+                        firstName: document.getElementById('fname').value,
+                        lastName: document.getElementById('lname').value,
+                        street: document.getElementById('street').value,
+                        zipCode: document.getElementById('zip').value,
+                        phone: document.getElementById('phone').value
+                    },
+                    pickupTimeSlot: selectedPickupTime,
+                    items: cart.map(item => ({ type: item.key, quantity: item.qty }))
+                })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || t.orderFailed);
+
+            orderId = result.data.id;
+            const confirmationMessage = `${t.step3Msg} ${t.pickupTime}: ${selectedPickupTime.replace('-', '–')}. ${t.orderNumber}: ${orderId}.`;
+            document.getElementById('t-step3-msg').innerText = confirmationMessage;
+            sessionStorage.removeItem('pfandCart');
+            cart = [];
+            goToStep(3);
+        } catch (error) {
+            errorMessage.innerText = error instanceof Error ? error.message : t.orderFailed;
+            errorMessage.classList.remove('hidden');
+        } finally {
+            submitButton.disabled = false;
+            submitButton.innerText = t.btnSubmit;
+        }
+    }
+
+    function resetApp() {
+        document.getElementById('addressForm').reset();
+        document.getElementById('order-error').classList.add('hidden');
+        document.getElementById('bottleType').selectedIndex = 0;
+        document.getElementById('qty').value = 1;
+        selectedPickupTime = '';
+        orderId = '';
+        orderSubmissionKey = crypto.randomUUID();
+        cart = [];
+        sessionStorage.removeItem('pfandCart');
+        document.getElementById('t-step3-msg').innerText = translations[currentLang].step3Msg;
+        renderCart();
+        goToStep(1);
+    }
+</script>
+</body>
+</html>
