@@ -194,6 +194,17 @@
 
         .hidden { display: none !important; }
 
+        #order-back-dialog {
+            max-width: min(440px, calc(100vw - 32px));
+            border: none;
+            border-radius: 8px;
+            padding: 24px;
+            color: var(--text);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+        }
+        #order-back-dialog::backdrop { background: rgba(9, 30, 66, 0.65); }
+        #order-back-dialog p { margin: 0 0 20px; line-height: 1.5; }
+
         @media (min-width: 761px) and (max-width: 1024px) {
             .bg-hero { background-position: 58% center; }
         }
@@ -367,9 +378,21 @@
     <!-- STEP 3: CONFIRMATION -->
     <div class="card hidden" id="step3">
         <h2 style="color: var(--success);" id="t-step3-title">Order Confirmed!</h2>
-        <p id="t-step3-msg">Thank you. Your doorstep Pfand pickup request has been scheduled. A cargo bike courier will arrive during your selected window.</p>
+        <p id="t-step3-msg">
+            <span id="t-step3-msg-intro">Thank you. Your doorstep Pfand pickup request has been scheduled.</span><br><br>
+            <span id="t-step3-msg-courier">A cargo bike courier will arrive during your selected window.</span><br id="t-step3-msg-pickup-break" class="hidden"><br id="t-step3-msg-pickup-extra-break" class="hidden">
+            <span id="t-step3-msg-pickup" class="hidden"></span><strong id="t-step3-msg-pickup-value"></strong><br id="t-step3-msg-order-break" class="hidden"><br id="t-step3-msg-order-extra-break" class="hidden">
+            <span id="t-step3-msg-order" class="hidden"></span><strong id="t-step3-msg-order-value"></strong>
+        </p>
         <button class="btn" id="t-btn-reset" onclick="resetApp()">Schedule Another Pickup</button>
     </div>
+
+    <dialog id="order-back-dialog" aria-labelledby="order-back-message">
+        <p id="order-back-message">Your Order is Confirmed! You can Schedule a new order by clicking on "Schedule Another Pickup"</p>
+        <form method="dialog">
+            <button type="submit" class="btn">OK</button>
+        </form>
+    </dialog>
 
 <script>
     const translations = {
@@ -401,8 +424,8 @@
             phoneInvalid: "Enter at least six digits and use only common phone symbols.",
             quantityLimit: "A maximum of 1,000 bottles per category can be ordered.",
             removeItem: "Remove item",
-            step3Title: "Order Confirmed!",
-            step3Msg: "Thank you. Your doorstep Pfand pickup request has been scheduled. A cargo bike courier will arrive during your selected window.",
+            step3MsgIntro: "Thank you. Your doorstep Pfand pickup request has been scheduled.",
+            step3MsgCourier: "A cargo bike courier will arrive during your selected window.",
             btnReset: "Schedule Another Pickup",
             pet: "PET Plastic Bottle (€0.25)",
             beer: "Glass Beer Bottle (€0.08)",
@@ -437,8 +460,8 @@
             phoneInvalid: "Geben Sie mindestens sechs Ziffern und nur übliche Telefonsymbole ein.",
             quantityLimit: "Pro Kategorie können höchstens 1.000 Flaschen bestellt werden.",
             removeItem: "Artikel entfernen",
-            step3Title: "Bestellung Bestätigt!",
-            step3Msg: "Vielen Dank. Ihre Pfandabholung wurde erfolgreich gebucht. Ein Lastenrad-Kurier wird zum gewählten Zeitpunkt bei Ihnen sein.",
+            step3MsgIntro: "Vielen Dank. Ihre Pfandabholung wurde erfolgreich gebucht.",
+            step3MsgCourier: "Ein Lastenrad-Kurier wird zum gewählten Zeitpunkt bei Ihnen sein.",
             btnReset: "Weitere Abholung Buchen",
             pet: "Einweg PET-Flasche (€0.25)",
             beer: "Bier-Glasflasche (€0.08)",
@@ -454,6 +477,10 @@
     let selectedPickupTime = '';
     let orderId = '';
     let orderSubmissionKey = crypto.randomUUID();
+    let currentStep = 1;
+    const initialStep = history.state?.pulseStep === 2 ? 2 : 1;
+
+    history.replaceState({ ...history.state, pulseStep: initialStep }, '');
 
     function loadCart() {
         try {
@@ -469,6 +496,7 @@
     }
 
     setLanguage(currentLang);
+    if (initialStep === 2) goToStep(2);
 
     function setLanguage(lang) {
         currentLang = lang;
@@ -494,11 +522,7 @@
         document.getElementById('t-lbl-time-slot').innerText = t.lblTimeSlot;
         document.getElementById('t-btn-back').innerText = t.btnBack;
         document.getElementById('t-btn-submit').innerText = t.btnSubmit;
-        document.getElementById('t-step3-title').innerText = t.step3Title;
-        const confirmationMessage = selectedPickupTime
-            ? `${t.step3Msg} ${t.pickupTime}: ${selectedPickupTime.replace('-', '–')}. ${t.orderNumber}: ${orderId}.`
-            : t.step3Msg;
-        document.getElementById('t-step3-msg').innerText = confirmationMessage;
+        renderConfirmationMessage();
         document.getElementById('t-btn-reset').innerText = t.btnReset;
         const select = document.getElementById('bottleType');
         Array.from(select.options).forEach(opt => {
@@ -510,6 +534,33 @@
         timeSlotPlaceholder.text = t.slotPlaceholder;
 
         renderCart();
+    }
+
+    function renderConfirmationMessage() {
+        const t = translations[currentLang];
+        document.getElementById('t-step3-msg-intro').innerText = t.step3MsgIntro;
+        document.getElementById('t-step3-msg-courier').innerText = t.step3MsgCourier;
+
+        const pickupLine = document.getElementById('t-step3-msg-pickup');
+        const orderLine = document.getElementById('t-step3-msg-order');
+        const pickupValue = document.getElementById('t-step3-msg-pickup-value');
+        const orderValue = document.getElementById('t-step3-msg-order-value');
+        const pickupBreak = document.getElementById('t-step3-msg-pickup-break');
+        const pickupExtraBreak = document.getElementById('t-step3-msg-pickup-extra-break');
+        const orderBreak = document.getElementById('t-step3-msg-order-break');
+        const orderExtraBreak = document.getElementById('t-step3-msg-order-extra-break');
+        pickupLine.classList.toggle('hidden', !selectedPickupTime);
+        pickupValue.classList.toggle('hidden', !selectedPickupTime);
+        pickupBreak.classList.toggle('hidden', !selectedPickupTime);
+        pickupExtraBreak.classList.toggle('hidden', !selectedPickupTime);
+        orderLine.classList.toggle('hidden', !orderId);
+        orderValue.classList.toggle('hidden', !orderId);
+        orderBreak.classList.toggle('hidden', !orderId);
+        orderExtraBreak.classList.toggle('hidden', !orderId);
+        pickupLine.innerText = selectedPickupTime ? `${t.pickupTime}: ` : '';
+        pickupValue.innerText = selectedPickupTime ? `${selectedPickupTime.replace('-', '–')}.` : '';
+        orderLine.innerText = orderId ? `${t.orderNumber}: ` : '';
+        orderValue.innerText = orderId ? `${orderId}.` : '';
     }
 
     function adjustQty(amount) {
@@ -647,12 +698,35 @@
             return;
         }
 
+        if (step === 2 && history.state?.pulseStep !== 2) {
+            history.pushState({ ...history.state, pulseStep: 2 }, '');
+        } else if (step === 1 && history.state?.pulseStep === 2) {
+            history.back();
+            return;
+        }
+
         document.getElementById('t-cart-validation').classList.add('hidden');
         document.getElementById('step1').classList.add('hidden');
         document.getElementById('step2').classList.add('hidden');
         document.getElementById('step3').classList.add('hidden');
         document.getElementById('step' + step).classList.remove('hidden');
+        currentStep = step;
     }
+
+    window.addEventListener('popstate', event => {
+        if (currentStep === 3) {
+            history.pushState({ ...event.state, pulseStep: 3 }, '');
+            document.getElementById('order-back-dialog').showModal();
+            return;
+        }
+
+        const step = event.state?.pulseStep === 2 ? 2 : 1;
+        document.getElementById('t-cart-validation').classList.add('hidden');
+        document.getElementById('step1').classList.toggle('hidden', step !== 1);
+        document.getElementById('step2').classList.toggle('hidden', step !== 2);
+        document.getElementById('step3').classList.add('hidden');
+        currentStep = step;
+    });
 
     async function submitOrder(e) {
         e.preventDefault();
@@ -690,10 +764,10 @@
             if (!response.ok) throw new Error(result.error || t.orderFailed);
 
             orderId = result.data.id;
-            const confirmationMessage = `${t.step3Msg} ${t.pickupTime}: ${selectedPickupTime.replace('-', '–')}. ${t.orderNumber}: ${orderId}.`;
-            document.getElementById('t-step3-msg').innerText = confirmationMessage;
+            renderConfirmationMessage();
             sessionStorage.removeItem('pfandCart');
             cart = [];
+            history.replaceState({ ...history.state, pulseStep: 3 }, '');
             goToStep(3);
         } catch (error) {
             errorMessage.innerText = error instanceof Error ? error.message : t.orderFailed;
@@ -714,7 +788,8 @@
         orderSubmissionKey = crypto.randomUUID();
         cart = [];
         sessionStorage.removeItem('pfandCart');
-        document.getElementById('t-step3-msg').innerText = translations[currentLang].step3Msg;
+        renderConfirmationMessage();
+        history.replaceState({ ...history.state, pulseStep: 1 }, '');
         renderCart();
         goToStep(1);
     }

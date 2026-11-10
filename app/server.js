@@ -7,6 +7,7 @@ const initSqlJs = require('sql.js');
 const port = Number(process.env.PORT || 4174);
 const publicDirectory = path.join(__dirname, 'public');
 const bottleRates = { pet: 0.25, beer: 0.08, water: 0.15, can: 0.25 };
+const orderIdPattern = /^(?:[0-9]{4}|[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 const pickupSlots = new Set([
   '10:00-11:00', '11:00-12:00', '12:00-13:00', '13:00-14:00', '14:00-15:00',
   '15:00-16:00', '16:00-17:00', '17:00-18:00', '18:00-19:00',
@@ -231,9 +232,9 @@ async function createOrder(request, response) {
     throw error;
   }
 
-  const id = crypto.randomUUID();
   const totalRefund = order.items.reduce((total, item) => total + item.unitRefund * item.quantity, 0).toFixed(2);
   const requestHash = crypto.createHash('sha256').update(JSON.stringify(order)).digest('hex');
+  let id;
   let client;
   let duplicateOrder;
   try {
@@ -252,6 +253,17 @@ async function createOrder(request, response) {
         duplicateOrder = await readOrder(client, existing.rows[0].id);
         await client.query('COMMIT');
       } else {
+        const references = await client.query(
+          "SELECT id FROM pickup_orders WHERE length(id) = 4 AND id GLOB '[0-9][0-9][0-9][0-9]'",
+        );
+        const usedReferences = new Set(references.rows.map((row) => row.id));
+        const availableReferences = Array.from({ length: 9000 }, (_value, index) => String(index + 1000))
+          .filter((reference) => !usedReferences.has(reference));
+        if (availableReferences.length === 0) {
+          throw new ApiError(503, 'No four-digit order references are available');
+        }
+        id = availableReferences[crypto.randomInt(availableReferences.length)];
+
         await client.query(
           `INSERT INTO pickup_orders
             (id, first_name, last_name, street, zip_code, phone, pickup_time_slot, total_refund, idempotency_key, request_hash)
@@ -285,6 +297,9 @@ async function createOrder(request, response) {
       client.release();
     }
   } catch (error) {
+    if (error instanceof ApiError) {
+      return sendJson(response, error.status, { error: error.message });
+    }
     console.error('Failed to save pickup order:', error);
     return sendJson(response, 503, { error: 'Order storage is unavailable' });
   }
@@ -317,7 +332,7 @@ async function readOrder(client, id) {
 }
 
 async function getOrder(response, id) {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+  if (!orderIdPattern.test(id)) {
     return sendJson(response, 404, { error: 'Order not found' });
   }
 

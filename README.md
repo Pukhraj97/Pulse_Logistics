@@ -40,6 +40,7 @@ Idempotency-Key: 8e03978e-40d5-43e8-bc93-6894a57f9324
 ```
 
 - `POST /api/orders` validates and saves an order. It requires a UUID `Idempotency-Key`. A new order returns `201`; a retry with the same key and payload returns the existing order with `200`; using that key with different order data returns `409`.
+- Each new order receives a unique four-digit reference from `1000` to `9999`. Since only 9,000 references are available, creating new orders will stop with an explicit error if they are all in use.
 - `GET /api/orders` returns order history without street or phone.
 - `GET /api/orders/{id}` returns an order receipt without customer contact details.
 - `GET /health` returns `{"status":"ok"}` when the HTTP server is responding. It does not check database readiness.

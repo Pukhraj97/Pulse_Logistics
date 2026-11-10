@@ -22,6 +22,24 @@ async function findAvailablePort() {
 }
 
 test.describe('Pulse Logistics pickup orders', () => {
+  test('browser Back returns from delivery details to bottle selection', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+    await page.getByRole('button', { name: 'Add to Order' }).click();
+    await page.getByRole('button', { name: 'Proceed to Address' }).click();
+
+    await expect(page.getByRole('heading', { name: '2. Delivery & Address' })).toBeVisible();
+    await page.reload();
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '2. Delivery & Address' })).toBeVisible();
+
+    await page.goBack();
+    await expect(page.getByRole('heading', { name: '1. Bottle Selection' })).toBeVisible();
+
+    await page.goForward();
+    await expect(page.getByRole('heading', { name: '2. Delivery & Address' })).toBeVisible();
+  });
+
   test('submits the bottle basket and page-two contact details', async ({ page }) => {
     let submittedOrder: Record<string, unknown> | undefined;
     await page.route('**/api/orders', async (route) => {
@@ -31,7 +49,7 @@ test.describe('Pulse Logistics pickup orders', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           data: {
-            id: 'order-test-123',
+            id: '1234',
             status: 'confirmed',
             pickupTimeSlot: '10:00-11:00',
             totalRefund: '0.50',
@@ -56,7 +74,27 @@ test.describe('Pulse Logistics pickup orders', () => {
     await page.getByRole('button', { name: 'Confirm Pickup' }).click();
 
     await expect(page.getByRole('heading', { name: 'Order Confirmed!' })).toBeVisible();
-    await expect(page.locator('#t-step3-msg')).toContainText('order-test-123');
+    await expect(page.locator('#t-step3-title')).toHaveText('Order Confirmed!');
+    await expect(page.locator('#t-step3-msg')).toHaveJSProperty(
+      'innerText',
+      'Thank you. Your doorstep Pfand pickup request has been scheduled.\n\n' +
+        'A cargo bike courier will arrive during your selected window.\n\n' +
+        'Selected pickup time: 10:00–11:00.\n\n' +
+        'Order reference: 1234.',
+    );
+    await expect(page.locator('#t-step3-msg-pickup-value')).toHaveText('10:00–11:00.');
+    await expect(page.locator('#t-step3-msg-order-value')).toHaveText('1234.');
+    await expect(page.locator('#t-step3-msg strong')).toHaveCount(2);
+    await page.goBack();
+    await expect(page.getByRole('dialog')).toContainText(
+      'Your Order is Confirmed! You can Schedule a new order by clicking on "Schedule Another Pickup"',
+    );
+    await page.getByRole('button', { name: 'OK' }).click();
+    await expect(page.getByRole('heading', { name: 'Order Confirmed!' })).toBeVisible();
+    await page.getByRole('button', { name: 'Schedule Another Pickup' }).click();
+    await expect(page.getByRole('heading', { name: '1. Bottle Selection' })).toBeVisible();
+    await page.goBack();
+    await expect(page.getByRole('heading', { name: '1. Bottle Selection' })).toBeVisible();
     expect(await page.locator('#fname').getAttribute('maxlength')).toBe('100');
     expect(await page.locator('#street').getAttribute('maxlength')).toBe('200');
     expect(await page.locator('#zip').getAttribute('autocomplete')).toBe('postal-code');
@@ -345,7 +383,7 @@ test.describe('Pulse Logistics pickup orders', () => {
     expect(response.status()).toBe(201);
     await expect(response.json()).resolves.toEqual({
       data: {
-        id: expect.any(String),
+        id: expect.stringMatching(/^[0-9]{4}$/),
         status: 'confirmed',
         pickupTimeSlot: '10:00-11:00',
         totalRefund: '250.00',
@@ -373,7 +411,7 @@ test.describe('Pulse Logistics pickup orders', () => {
     expect(response.status()).toBe(201);
     const created = (await response.json()).data;
     expect(created).toEqual(expect.objectContaining({
-      id: expect.any(String),
+      id: expect.stringMatching(/^[0-9]{4}$/),
       status: 'confirmed',
       pickupTimeSlot: '12:00-13:00',
       totalRefund: '0.24',
@@ -389,6 +427,38 @@ test.describe('Pulse Logistics pickup orders', () => {
       items: [{ type: 'beer', quantity: 3, unitRefund: 0.08 }],
     }));
     expect(retrieved).not.toHaveProperty('customer');
+  });
+
+  test('generates a distinct four-digit reference for each new order', async ({ request }) => {
+    const data = {
+      customer: {
+        firstName: 'Unique',
+        lastName: 'Reference',
+        street: 'Main Street 1',
+        zipCode: '10115',
+        phone: '+49 151 12345678',
+      },
+      pickupTimeSlot: '12:00-13:00',
+      items: [{ type: 'beer', quantity: 1 }],
+    };
+
+    const firstResponse = await request.post('/api/orders', {
+      headers: idempotencyHeaders(),
+      data,
+    });
+    const secondResponse = await request.post('/api/orders', {
+      headers: idempotencyHeaders(),
+      data,
+    });
+    expect(firstResponse.status()).toBe(201);
+    expect(secondResponse.status()).toBe(201);
+
+    const firstId = (await firstResponse.json()).data.id;
+    const secondId = (await secondResponse.json()).data.id;
+    expect(firstId).toMatch(/^[0-9]{4}$/);
+    expect(secondId).toMatch(/^[0-9]{4}$/);
+    expect(secondId).not.toBe(firstId);
+    expect((await request.get(`/api/orders/${secondId}`)).status()).toBe(200);
   });
 
   test('lists saved orders without returning customer contact details', async ({ request }) => {
