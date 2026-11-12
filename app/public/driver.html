@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101b18">
+  <title>Driver | Pulse Logistics</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #17231f;
+      background: #f3f6f3;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    header {
+      align-self: stretch;
+      width: 100%;
+      max-width: none;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 28px 16px;
+      min-height: 92px;
+      margin: 0;
+      color: #f7fbf8;
+      background: #101b18;
+    }
+    .brand-title {
+      position: absolute;
+      left: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 30px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.3px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      text-align: left;
+      white-space: nowrap;
+    }
+    .lang-switch {
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+    }
+    .lang-btn {
+      min-height: 0;
+      padding: 5px 12px;
+      border: 0;
+      border-radius: 16px;
+      color: #fff;
+      background: transparent;
+      font-size: .75rem;
+      font-weight: 700;
+    }
+    .lang-btn.active {
+      color: #102019;
+      background: #fff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+    main { width: min(100% - 32px, 760px); margin: 42px auto 80px; }
+    .eyebrow { margin: 0 0 10px; color: #4a8d52; font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(30px, 6vw, 46px); letter-spacing: -.055em; line-height: 1.05; }
+    .intro { max-width: 560px; margin: 14px 0 28px; color: #62706a; line-height: 1.6; }
+    .panel, .offer { border: 1px solid #e1e9e2; border-radius: 20px; background: white; box-shadow: 0 12px 40px #1c36220a; }
+    .panel { padding: clamp(20px, 5vw, 32px); }
+    .panel h2 { margin: 0 0 8px; font-size: 20px; letter-spacing: -.03em; }
+    .hint { margin: 0 0 22px; color: #718078; font-size: 14px; line-height: 1.55; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    label { display: grid; gap: 8px; color: #394840; font-size: 13px; font-weight: 700; }
+    input, select {
+      width: 100%; min-height: 48px; padding: 0 13px; border: 1px solid #dce5dd;
+      border-radius: 11px; color: #17231f; background: #fff; font: inherit; outline: none;
+    }
+    input:focus, select:focus { border-color: #57a45a; box-shadow: 0 0 0 3px #57a45a20; }
+    .select-wrap { position: relative; width: 100%; }
+    select.select-native {
+      position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden;
+      clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%);
+    }
+    .select-trigger {
+      position: relative; display: block; width: 100%; min-height: 42px; padding: 11px 42px 11px 13px;
+      overflow: hidden; border: 1px solid #d5dce6; border-radius: 12px; background: #fff;
+      box-shadow: 0 1px 2px rgba(9, 30, 66, 0.04); color: #172b4d; font: inherit;
+      font-size: .95rem; font-weight: 700; text-align: left; text-overflow: ellipsis;
+      white-space: nowrap; cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease;
+    }
+    .select-trigger::after {
+      position: absolute; top: 50%; right: 15px; width: 8px; height: 8px;
+      border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+      content: ""; pointer-events: none; transform: translateY(-70%) rotate(45deg);
+      transition: transform .18s ease;
+    }
+    .select-trigger[aria-expanded="true"]::after { transform: translateY(-20%) rotate(225deg); }
+    .select-trigger:hover { border-color: #aab6c6; background: #fff; filter: none; transform: none; }
+    .select-trigger:focus-visible { outline: 3px solid rgba(0, 82, 204, .14); outline-offset: 1px; }
+    .select-menu {
+      position: absolute; z-index: 20; top: calc(100% + 6px); right: 0; left: 0; max-height: 220px;
+      overflow-y: auto; padding: 4px; border: 1px solid #d5dce6; border-radius: 12px;
+      background: #fff; box-shadow: 0 10px 24px rgba(9, 30, 66, .16); color: #172b4d;
+    }
+    .select-menu[data-placement="above"] { top: auto; bottom: calc(100% + 6px); }
+    .select-menu[hidden] { display: none; }
+    .select-option { padding: 9px 10px; border-radius: 8px; color: #172b4d; cursor: pointer; font-size: .9rem; }
+    .select-option:hover, .select-option.is-active { background: #f0f7ef; }
+    .select-option[aria-selected="true"] { background: #e8f4e5; color: #4a8d52; font-weight: 600; }
+    button, .button {
+      display: inline-flex; min-height: 46px; align-items: center; justify-content: center;
+      gap: 8px; padding: 0 18px; border: 0; border-radius: 11px; cursor: pointer;
+      color: #102019; background: #a7f078; font: inherit; font-weight: 800; text-decoration: none;
+      transition: transform .15s ease, filter .15s ease;
+    }
+    button:hover, .button:hover { filter: brightness(.97); transform: translateY(-1px); }
+    button:disabled { cursor: wait; opacity: .6; transform: none; }
+    .form-actions { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
+    .privacy { color: #829087; font-size: 12px; line-height: 1.5; }
+    .error { min-height: 20px; margin: 12px 0 0; color: #b33434; font-size: 13px; }
+    [hidden] { display: none !important; }
+    .dashboard-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
+    .driver-name { margin: 7px 0 0; color: #748078; font-size: 14px; }
+    .presence { display: flex; align-items: center; gap: 12px; }
+    .presence-label { color: #5e6b64; font-size: 13px; font-weight: 700; }
+    .switch {
+      position: relative;
+      flex: 0 0 56px;
+      width: 56px;
+      min-width: 56px;
+      min-height: 32px;
+      height: 32px;
+      padding: 0;
+      border-radius: 20px;
+      background: #cbd4ce;
+      transition: background .2s;
+    }
+    .switch::after { position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; background: #fff; content: ""; transition: transform .2s; }
+    .switch[aria-checked="true"] { background: #45a34e; }
+    .switch[aria-checked="true"]::after { transform: translateX(24px); }
+    .status-line { display: flex; align-items: center; gap: 9px; margin: 0 0 18px; color: #627069; font-size: 14px; }
+    .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #a1aaa4; }
+    .status-dot.online { background: #44a94d; box-shadow: 0 0 0 4px #44a94d1c; }
+    .offers { display: grid; gap: 14px; }
+    .offer { overflow: hidden; padding: 20px; }
+    .active-order { border-color: #9edb91; box-shadow: 0 12px 40px #34933d12; }
+    .active-label { color: #32823d; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .offer-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .offer-ref { color: #79857e; font-size: 12px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+    .countdown { color: #42534a; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .offer h3 { margin: 8px 0 5px; font-size: 18px; letter-spacing: -.025em; }
+    .offer-address { margin: 0; color: #69766f; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+    .offer-details { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 14px 0; color: #59665f; font-size: 13px; }
+    .progress-track { height: 6px; overflow: hidden; border-radius: 8px; background: #e9eee9; }
+    .progress-fill { width: 100%; height: 100%; border-radius: inherit; background: #81d962; transition: width .8s linear; }
+    .offer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
+    .maps-link { color: #32823d; font-size: 13px; font-weight: 800; text-decoration: none; }
+    .accept { min-height: 40px; }
+    .complete { min-height: 40px; }
+    .empty { padding: 30px 20px; border: 1px dashed #d5dfd6; border-radius: 16px; color: #728078; text-align: center; line-height: 1.6; }
+    .toast { margin: 0 0 16px; padding: 12px 14px; border-radius: 11px; color: #236331; background: #e6f7e3; font-size: 14px; }
+    .confirm-dialog {
+      width: min(440px, calc(100% - 32px)); padding: 24px; border: 1px solid #e1e9e2;
+      border-radius: 20px; color: #17231f; background: #fff; box-shadow: 0 20px 60px #10201940;
+    }
+    .confirm-dialog::backdrop { background: #101b1880; }
+    .confirm-dialog h2 { margin: 0 0 8px; font-size: 20px; letter-spacing: -.03em; }
+    .confirm-dialog p { margin: 0; color: #627069; line-height: 1.55; }
+    .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+    .confirm-actions .cancel { border: 1px solid #dce5dd; color: #394840; background: #f3f6f3; }
+    @media (max-width: 560px) {
+      main { margin-top: 30px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .dashboard-head { align-items: flex-start; flex-direction: column; }
+      .presence { width: 100%; justify-content: space-between; padding: 12px 14px; border: 1px solid #e1e9e2; border-radius: 13px; background: #fff; }
+      .offer-actions { align-items: flex-start; flex-direction: column; }
+      .offer-actions .accept { width: 100%; }
+    }
+    @media (max-width: 480px) {
+      header { width: 100%; padding: 22px 12px; min-height: 80px; }
+      .brand-title { left: 12px; }
+    }
+    @media (max-width: 380px) {
+      header { padding: 20px 12px; min-height: 76px; }
+      .brand-title { font-size: 22px; }
+      .lang-btn { padding: 5px 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand-title">PULSE LOGISTICS</div>
+    <div class="lang-switch" role="group" aria-label="Select language">
+      <button class="lang-btn" id="btn-en" type="button" aria-pressed="false">EN</button>
+      <button class="lang-btn" id="btn-de" type="button" aria-pressed="true">DE</button>
+    </div>
+  </header>
+  <main>
+    <p class="eyebrow" id="register-eyebrow">On the move, on your terms</p>
+    <h1 id="page-title">Pickup starts with you.</h1>
+    <p class="intro" id="page-intro">Go online to receive nearby bottle pickup requests. You’ll have 60 seconds to accept each one, and can open the pickup address straight in Google Maps.</p>
+
+    <section id="register-panel" class="panel" aria-labelledby="register-title">
+      <h2 id="register-title">Join as a driver</h2>
+      <p class="hint" id="register-hint">Create your driver profile to start receiving pickup requests on this device.</p>
+      <form id="register-form">
+        <div class="form-grid">
+          <label for="driver-name"><span id="register-name-label">Your name</span>
+            <input id="driver-name" name="name" autocomplete="name" maxlength="100" required>
+          </label>
+          <label for="vehicle-type"><span id="vehicle-label">Vehicle</span>
+            <select id="vehicle-type" name="vehicleType">
+              <option value="cargo-bike">Cargo bike</option>
+              <option value="bike">Bicycle</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-actions"><button id="register-button" type="submit">Create driver profile</button></div>
+        <p class="privacy" id="register-privacy">This local demo saves your driver sign-in token in this browser. Registration is not identity-verified.</p>
+        <p id="register-error" class="error" role="alert"></p>
+      </form>
+    </section>
+
+    <section id="dashboard" hidden aria-labelledby="dashboard-title">
+      <div class="dashboard-head">
+        <div>
+          <p class="eyebrow" id="dashboard-eyebrow">Driver dashboard</p>
+          <h1 id="dashboard-title">Your requests</h1>
+          <p id="driver-profile-name" class="driver-name"></p>
+        </div>
+        <div class="presence">
+          <span id="presence-label" class="presence-label">You’re offline</span>
+          <button id="presence-toggle" class="switch" type="button" role="switch" aria-checked="false" aria-label="Go online to receive orders"></button>
+        </div>
+      </div>
+      <div id="toast" class="toast" role="status" hidden></div>
+      <p class="status-line"><span id="status-dot" class="status-dot"></span><span id="status-message">Go online when you’re ready to receive requests.</span></p>
+      <div id="offers" class="offers" aria-live="polite"></div>
+      <p id="dashboard-error" class="error" role="alert"></p>
+    </section>
+  </main>
+  <dialog id="complete-order-dialog" class="confirm-dialog" aria-labelledby="complete-order-title" aria-describedby="complete-order-message">
+    <h2 id="complete-order-title">Complete pickup?</h2>
+    <p id="complete-order-message">Are you sure this pickup is complete?</p>
+    <div class="confirm-actions">
+      <button id="cancel-complete-order" class="cancel" type="button">No, go back</button>
+      <button id="confirm-complete-order" type="button">Yes, complete</button>
+    </div>
+  </dialog>
+  <script>
+    const translations = {
+      en: {
+        languageLabel: 'Select language',
+        title: 'Driver | Pulse Logistics',
+        registerEyebrow: 'On the move, on your terms',
+        pageTitle: 'Pickup starts with you.',
+        pageIntro: 'Go online to receive nearby bottle pickup requests. You’ll have 60 seconds to accept each one, and can open the pickup address straight in Google Maps.',
+        registerTitle: 'Join as a driver',
+        registerHint: 'Create your driver profile to start receiving pickup requests on this device.',
+        driverName: 'Your name',
+        vehicle: 'Vehicle',
+        vehicles: { 'cargo-bike': 'Cargo bike', bike: 'Bicycle' },
+        registerButton: 'Create driver profile',
+        privacy: 'Your unsubmitted name is saved in this tab across reloads. This local demo saves your sign-in token in this browser; registration is not identity-verified.',
+        dashboardEyebrow: 'Driver dashboard',
+        dashboardTitle: 'Your requests',
+        activeOrder: 'Active pickup',
+        acceptedStatus: 'Accepted',
+        completeOrder: 'Complete pickup',
+        confirmCompleteTitle: 'Complete pickup?',
+        confirmCompleteMessage: 'Are you sure this pickup is complete?',
+        confirmCompleteYes: 'Yes, complete',
+        confirmCompleteNo: 'No, go back',
+        completed: (id) => `Pickup #${id} marked complete. You can accept another order.`,
+        online: 'You’re online',
+        offline: 'You’re offline',
+        goOnline: 'Go online to receive orders',
+        goOffline: 'Go offline',
+        onlineStatus: 'Requests are sent directly to your dashboard.',
+        offlineStatus: 'Go online when you’re ready to receive requests.',
+        onlineEmpty: 'You’re online and ready. New pickup requests will appear here as soon as they’re sent.',
+        offlineEmpty: 'You’re offline. Switch to online whenever you’re ready to receive an order.',
+        pickup: 'Pickup',
+        pickupWindow: 'Pickup window',
+        bottle: 'bottle',
+        bottles: 'bottles',
+        itemTypes: { pet: 'PET bottles', beer: 'beer bottles', water: 'water bottles', can: 'cans' },
+        secondsLeft: (seconds) => `${seconds}s left`,
+        expired: 'Expired',
+        progressLabel: 'Time left to accept',
+        maps: 'Open pickup in Google Maps ↗',
+        accept: 'Accept pickup',
+        accepted: (id) => `Pickup #${id} accepted. The address is ready in Google Maps.`,
+        errors: {
+          'Driver authentication is required': 'Driver authentication is required.',
+          'Driver token is invalid': 'Driver sign-in is invalid. Please register again.',
+          'Driver name must contain 1–100 letters, spaces, apostrophes, or hyphens': 'Enter a name using 1–100 letters, spaces, apostrophes, or hyphens.',
+          'Vehicle type must be cargo-bike, bike, or car': 'Choose a supported vehicle.',
+          'online must be true or false': 'Choose whether you want to be online.',
+          'This order is no longer available to accept': 'This order is no longer available.',
+          'You already have an active order': 'Complete your active order before accepting another.',
+          'This is not your active order': 'This is not your active order.',
+          'Could not complete this order': 'Could not complete this order. Please try again.',
+          'Driver registration is unavailable': 'Driver registration is unavailable. Please try again.',
+          'Driver service is unavailable': 'Driver service is unavailable. Please try again.',
+          'Driver presence is unavailable': 'Your online status could not be updated. Please try again.',
+          'Could not accept this order': 'Could not accept this order. Please try again.',
+        },
+      },
+      de: {
+        languageLabel: 'Sprache auswählen',
+        title: 'Fahrer | Pulse Logistics',
+        registerEyebrow: 'Unterwegs, in Ihrem Tempo',
+        pageTitle: 'Abholung beginnt bei Ihnen.',
+        pageIntro: 'Gehen Sie online, um Abholanfragen in Ihrer Nähe zu erhalten. Sie haben 60 Sekunden Zeit, jede Anfrage anzunehmen. Die Abholadresse lässt sich direkt in Google Maps öffnen.',
+        registerTitle: 'Als Fahrer registrieren',
+        registerHint: 'Erstellen Sie Ihr Fahrerprofil, um auf diesem Gerät Abholanfragen zu erhalten.',
+        driverName: 'Ihr Name',
+        vehicle: 'Fahrzeug',
+        vehicles: { 'cargo-bike': 'Lastenrad', bike: 'Fahrrad' },
+        registerButton: 'Fahrerprofil erstellen',
+        privacy: 'Ihr noch nicht übermittelter Name bleibt in diesem Tab auch nach dem Neuladen erhalten. Diese lokale Demo speichert Ihr Anmeldetoken in diesem Browser; die Registrierung überprüft nicht Ihre Identität.',
+        dashboardEyebrow: 'Fahrer-Dashboard',
+        dashboardTitle: 'Ihre Anfragen',
+        activeOrder: 'Aktive Abholung',
+        acceptedStatus: 'Angenommen',
+        completeOrder: 'Abholung abschließen',
+        confirmCompleteTitle: 'Abholung abschließen?',
+        confirmCompleteMessage: 'Sind Sie sicher, dass diese Abholung abgeschlossen ist?',
+        confirmCompleteYes: 'Ja, abschließen',
+        confirmCompleteNo: 'Nein, zurück',
+        completed: (id) => `Abholung #${id} abgeschlossen. Sie können einen weiteren Auftrag annehmen.`,
+        online: 'Sie sind online',
+        offline: 'Sie sind offline',
+        goOnline: 'Online gehen, um Aufträge zu erhalten',
+        goOffline: 'Offline gehen',
+        onlineStatus: 'Neue Anfragen werden direkt hier angezeigt.',
+        offlineStatus: 'Gehen Sie online, wenn Sie Anfragen erhalten möchten.',
+        onlineEmpty: 'Sie sind online und bereit. Neue Abholanfragen werden hier angezeigt.',
+        offlineEmpty: 'Sie sind offline. Gehen Sie online, wenn Sie eine Anfrage erhalten möchten.',
+        pickup: 'Abholung',
+        pickupWindow: 'Abholzeit',
+        bottle: 'Flasche',
+        bottles: 'Flaschen',
+        itemTypes: { pet: 'PET-Flaschen', beer: 'Bierflaschen', water: 'Wasserflaschen', can: 'Dosen' },
+        secondsLeft: (seconds) => `Noch ${seconds} s`,
+        expired: 'Abgelaufen',
+        progressLabel: 'Verbleibende Annahmezeit',
+        maps: 'Abholadresse in Google Maps öffnen ↗',
+        accept: 'Abholung annehmen',
+        accepted: (id) => `Abholung #${id} angenommen. Die Adresse ist in Google Maps verfügbar.`,
+        errors: {
+          'Driver authentication is required': 'Die Fahrer-Anmeldung ist erforderlich.',
+          'Driver token is invalid': 'Die Fahrer-Anmeldung ist ungültig. Bitte registrieren Sie sich erneut.',
+          'Driver name must contain 1–100 letters, spaces, apostrophes, or hyphens': 'Geben Sie einen Namen mit 1–100 Buchstaben, Leerzeichen, Apostrophen oder Bindestrichen ein.',
+          'Vehicle type must be cargo-bike, bike, or car': 'Wählen Sie ein unterstütztes Fahrzeug.',
+          'online must be true or false': 'Wählen Sie aus, ob Sie online gehen möchten.',
+          'This order is no longer available to accept': 'Diese Anfrage ist nicht mehr verfügbar.',
+          'You already have an active order': 'Schließen Sie Ihre aktive Abholung ab, bevor Sie einen weiteren Auftrag annehmen.',
+          'This is not your active order': 'Dies ist nicht Ihr aktiver Auftrag.',
+          'Could not complete this order': 'Der Auftrag konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.',
+          'Driver registration is unavailable': 'Die Fahrerregistrierung ist nicht verfügbar. Bitte versuchen Sie es erneut.',
+          'Driver service is unavailable': 'Der Fahrerservice ist nicht verfügbar. Bitte versuchen Sie es erneut.',
+          'Driver presence is unavailable': 'Ihr Online-Status konnte nicht geändert werden. Bitte versuchen Sie es erneut.',
+          'Could not accept this order': 'Die Anfrage konnte nicht angenommen werden. Bitte versuchen Sie es erneut.',
+        },
+      },
+    };
+    const offerWindowSeconds = 60;
+    const tokenKey = 'pulse-driver-token';
+    const registerPanel = document.querySelector('#register-panel');
+    const dashboard = document.querySelector('#dashboard');
+    const registerForm = document.querySelector('#register-form');
+    const registerButton = document.querySelector('#register-button');
+    const driverNameInput = document.querySelector('#driver-name');
+    const driverNameDraftKey = 'pulse-driver-name-draft';
+    const completeOrderDialog = document.querySelector('#complete-order-dialog');
+    const cancelCompleteOrderButton = document.querySelector('#cancel-complete-order');
+    const confirmCompleteOrderButton = document.querySelector('#confirm-complete-order');
+    const toggle = document.querySelector('#presence-toggle');
+    const offersElement = document.querySelector('#offers');
+    const apiHeaders = () => localStorage.getItem(tokenKey)
+      ? { Authorization: `Bearer ${localStorage.getItem(tokenKey)}` }
+      : {};
+    let profile;
+    let pendingOrders = [];
+    let activeOrder = null;
+    let pendingCompletion = null;
+    let busy = false;
+    let pollTimer;
+    let tickTimer;
+    let currentLang = 'de';
+    let refreshVehicleSelect;
+
+    driverNameInput.value = sessionStorage.getItem(driverNameDraftKey) || '';
+    driverNameInput.addEventListener('input', () => {
+      if (driverNameInput.value) sessionStorage.setItem(driverNameDraftKey, driverNameInput.value);
+      else sessionStorage.removeItem(driverNameDraftKey);
+    });
+
+    function setLanguage(language) {
+      currentLang = language;
+      sessionStorage.setItem('appLang', language);
+      document.documentElement.lang = language;
+      const t = translations[language];
+      document.title = t.title;
+      document.querySelector('.lang-switch').setAttribute('aria-label', t.languageLabel);
+      document.querySelector('#btn-en').classList.toggle('active', language === 'en');
+      document.querySelector('#btn-en').setAttribute('aria-pressed', String(language === 'en'));
+      document.querySelector('#btn-de').classList.toggle('active', language === 'de');
+      document.querySelector('#btn-de').setAttribute('aria-pressed', String(language === 'de'));
+      document.querySelector('#register-eyebrow').textContent = t.registerEyebrow;
+      document.querySelector('#page-title').textContent = t.pageTitle;
+      document.querySelector('#page-intro').textContent = t.pageIntro;
+      document.querySelector('#register-title').textContent = t.registerTitle;
+      document.querySelector('#register-hint').textContent = t.registerHint;
+      document.querySelector('#register-name-label').textContent = t.driverName;
+      document.querySelector('#vehicle-label').textContent = t.vehicle;
+      document.querySelector('#vehicle-type option[value="cargo-bike"]').textContent = t.vehicles['cargo-bike'];
+      document.querySelector('#vehicle-type option[value="bike"]').textContent = t.vehicles.bike;
+      document.querySelector('#register-button').textContent = t.registerButton;
+      document.querySelector('#register-privacy').textContent = t.privacy;
+      document.querySelector('#dashboard-eyebrow').textContent = t.dashboardEyebrow;
+      document.querySelector('#dashboard-title').textContent = t.dashboardTitle;
+      document.querySelector('#complete-order-title').textContent = t.confirmCompleteTitle;
+      document.querySelector('#complete-order-message').textContent = t.confirmCompleteMessage;
+      cancelCompleteOrderButton.textContent = t.confirmCompleteNo;
+      confirmCompleteOrderButton.textContent = t.confirmCompleteYes;
+      document.querySelector('#presence-toggle').setAttribute(
+        'aria-label',
+        profile && profile.driver.online ? t.goOffline : t.goOnline,
+      );
+      if (refreshVehicleSelect) refreshVehicleSelect();
+      if (profile) renderProfile();
+    }
+
+    function enhanceSelect(select) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'select-wrap';
+      select.parentNode.insertBefore(wrapper, select);
+      wrapper.append(select);
+      select.classList.add('select-native');
+      select.setAttribute('aria-hidden', 'true');
+      select.tabIndex = -1;
+
+      const trigger = document.createElement('button');
+      trigger.id = `${select.id}-control`;
+      trigger.type = 'button';
+      trigger.className = 'select-trigger';
+      trigger.setAttribute('role', 'combobox');
+      trigger.setAttribute('aria-haspopup', 'listbox');
+      trigger.setAttribute('aria-expanded', 'false');
+      trigger.setAttribute('aria-controls', `${select.id}-options`);
+
+      const menu = document.createElement('div');
+      menu.id = `${select.id}-options`;
+      menu.className = 'select-menu';
+      menu.setAttribute('role', 'listbox');
+      menu.setAttribute('aria-labelledby', trigger.id);
+      menu.hidden = true;
+      wrapper.append(trigger, menu);
+      select.closest('label').htmlFor = trigger.id;
+
+      let activeIndex = Math.max(0, select.selectedIndex);
+      function refreshOptions() {
+        menu.replaceChildren();
+        Array.from(select.options).forEach((option, index) => {
+          const item = document.createElement('div');
+          item.id = `${select.id}-option-${index}`;
+          item.className = 'select-option';
+          item.setAttribute('role', 'option');
+          item.setAttribute('aria-selected', String(index === select.selectedIndex));
+          item.dataset.value = option.value;
+          item.textContent = option.text;
+          menu.append(item);
+        });
+        trigger.textContent = select.selectedOptions[0]?.text || '';
+        activeIndex = Math.max(0, select.selectedIndex);
+      }
+
+      function closeMenu() {
+        menu.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.removeAttribute('aria-activedescendant');
+      }
+
+      function setActive(index) {
+        const options = Array.from(menu.children);
+        activeIndex = (index + options.length) % options.length;
+        options.forEach((option, optionIndex) => {
+          option.classList.toggle('is-active', optionIndex === activeIndex);
+        });
+        trigger.setAttribute('aria-activedescendant', options[activeIndex].id);
+        options[activeIndex].scrollIntoView({ block: 'nearest' });
+      }
+
+      function openMenu() {
+        menu.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        const rect = trigger.getBoundingClientRect();
+        const estimatedHeight = Math.min(220, menu.children.length * 38 + 8);
+        const roomBelow = window.innerHeight - rect.bottom;
+        const roomAbove = rect.top;
+        menu.dataset.placement = roomBelow < estimatedHeight && roomAbove > roomBelow ? 'above' : 'below';
+        setActive(activeIndex);
+      }
+
+      function chooseOption(option) {
+        select.value = option.dataset.value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        closeMenu();
+        trigger.focus();
+      }
+
+      trigger.addEventListener('click', () => {
+        if (menu.hidden) openMenu();
+        else closeMenu();
+      });
+      trigger.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          if (menu.hidden) openMenu();
+          setActive(activeIndex + (event.key === 'ArrowDown' ? 1 : -1));
+        } else if (event.key === 'Home' || event.key === 'End') {
+          event.preventDefault();
+          if (menu.hidden) openMenu();
+          setActive(event.key === 'Home' ? 0 : menu.children.length - 1);
+        } else if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          if (menu.hidden) openMenu();
+          else chooseOption(menu.children[activeIndex]);
+        } else if (event.key === 'Escape' && !menu.hidden) {
+          event.preventDefault();
+          closeMenu();
+        } else if (event.key === 'Tab') {
+          closeMenu();
+        }
+      });
+      menu.addEventListener('click', (event) => {
+        const option = event.target.closest('.select-option');
+        if (option) {
+          event.preventDefault();
+          chooseOption(option);
+        }
+      });
+      select.addEventListener('change', refreshOptions);
+      document.addEventListener('pointerdown', (event) => {
+        if (!wrapper.contains(event.target)) closeMenu();
+      });
+
+      refreshOptions();
+      return refreshOptions;
+    }
+
+    function localizedError(message) {
+      return translations[currentLang].errors[message] || message;
+    }
+
+    function bindOfferActions() {
+      offersElement.querySelectorAll('[data-accept]').forEach((button) => {
+        button.addEventListener('click', () => acceptOffer(button.dataset.accept, button));
+      });
+      offersElement.querySelectorAll('[data-complete]').forEach((button) => {
+        button.addEventListener('click', () => requestCompleteOrder(button.dataset.complete, button));
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      })[character]);
+    }
+
+    function showToast(message) {
+      const toast = document.querySelector('#toast');
+      toast.textContent = message;
+      toast.hidden = false;
+      window.setTimeout(() => { toast.hidden = true; }, 5000);
+    }
+
+    async function request(url, options = {}) {
+      const response = await fetch(url, {
+        ...options,
+        headers: { ...apiHeaders(), ...(options.headers || {}) },
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'The request could not be completed.');
+      return result.data;
+    }
+
+    function renderOffers() {
+      const t = translations[currentLang];
+      let activeMarkup = '';
+      if (activeOrder) {
+        const mapsUrl = new URL(activeOrder.mapsUrl);
+        if (mapsUrl.protocol === 'https:' && mapsUrl.hostname === 'www.google.com') {
+          const total = activeOrder.items.reduce((sum, item) => sum + item.quantity, 0);
+          const itemList = activeOrder.items.map((item) =>
+            `${escapeHtml(item.quantity)} ${escapeHtml(t.itemTypes[item.type] || item.type)}`).join(' · ');
+          activeMarkup = `<article class="offer active-order" data-active-order="${escapeHtml(activeOrder.id)}">
+            <div class="offer-top"><span class="active-label">${t.activeOrder} #${escapeHtml(activeOrder.id)}</span><span class="countdown">${t.acceptedStatus}</span></div>
+            <h3>${escapeHtml(activeOrder.address)}</h3>
+            <p class="offer-address">${t.pickupWindow} ${escapeHtml(activeOrder.pickupTimeSlot)}</p>
+            <div class="offer-details"><span>${total} ${total === 1 ? t.bottle : t.bottles}</span><span>${itemList}</span></div>
+            <div class="offer-actions"><a class="maps-link" href="${escapeHtml(mapsUrl.href)}" target="_blank" rel="noopener noreferrer">${t.maps}</a>
+              <button class="complete" type="button" data-complete="${escapeHtml(activeOrder.id)}">${t.completeOrder}</button></div>
+          </article>`;
+        }
+      }
+      if (!profile.online) {
+        offersElement.innerHTML = activeMarkup || `<div class="empty">${t.offlineEmpty}</div>`;
+        bindOfferActions();
+        return;
+      }
+      if (pendingOrders.length === 0) {
+        offersElement.innerHTML = activeMarkup || `<div class="empty">${t.onlineEmpty}</div>`;
+        bindOfferActions();
+        return;
+      }
+      offersElement.innerHTML = activeMarkup + pendingOrders.map((offer) => {
+        const total = offer.items.reduce((sum, item) => sum + item.quantity, 0);
+        const deadline = new Date(offer.expiresAt).getTime();
+        const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+        const percentage = Math.max(0, Math.min(100, (deadline - Date.now()) / (offerWindowSeconds * 10)));
+        const mapsUrl = new URL(offer.mapsUrl);
+        if (mapsUrl.protocol !== 'https:' || mapsUrl.hostname !== 'www.google.com') return '';
+        const itemList = offer.items.map((item) =>
+          `${escapeHtml(item.quantity)} ${escapeHtml(t.itemTypes[item.type] || item.type)}`).join(' · ');
+        return `<article class="offer" data-expiry="${deadline}">
+          <div class="offer-top"><span class="offer-ref">${t.pickup} #${escapeHtml(offer.id)}</span><span class="countdown">${t.secondsLeft(remaining)}</span></div>
+          <h3>${escapeHtml(offer.address)}</h3>
+          <p class="offer-address">${t.pickupWindow} ${escapeHtml(offer.pickupTimeSlot)}</p>
+          <div class="offer-details"><span>${total} ${total === 1 ? t.bottle : t.bottles}</span><span>${itemList}</span></div>
+          <div class="progress-track" role="progressbar" aria-label="${t.progressLabel}" aria-valuemin="0" aria-valuemax="${offerWindowSeconds}" aria-valuenow="${remaining}"><div class="progress-fill" style="width:${percentage}%"></div></div>
+          <div class="offer-actions"><a class="maps-link" href="${escapeHtml(mapsUrl.href)}" target="_blank" rel="noopener noreferrer">${t.maps}</a>
+            <button class="accept" type="button" data-accept="${escapeHtml(offer.id)}">${t.accept}</button></div>
+        </article>`;
+      }).join('');
+      bindOfferActions();
+    }
+
+    function updateCountdowns() {
+      const t = translations[currentLang];
+      offersElement.querySelectorAll('.offer[data-expiry]').forEach((card) => {
+        const remaining = Math.max(0, Math.ceil((Number(card.dataset.expiry) - Date.now()) / 1000));
+        const fill = card.querySelector('.progress-fill');
+        const bar = card.querySelector('[role="progressbar"]');
+        card.querySelector('.countdown').textContent = remaining ? t.secondsLeft(remaining) : t.expired;
+        fill.style.width = `${Math.max(0, Math.min(100, (Number(card.dataset.expiry) - Date.now()) / (offerWindowSeconds * 10)))}%`;
+        bar.setAttribute('aria-valuenow', String(remaining));
+        if (remaining === 0) card.querySelector('.accept').disabled = true;
+      });
+    }
+
+    function renderProfile() {
+      const t = translations[currentLang];
+      registerPanel.hidden = true;
+      dashboard.hidden = false;
+      document.querySelector('#driver-profile-name').textContent =
+        `${profile.driver.name} · ${t.vehicles[profile.driver.vehicleType] || profile.driver.vehicleType}`;
+      document.querySelector('#presence-label').textContent = profile.driver.online ? t.online : t.offline;
+      document.querySelector('#status-dot').classList.toggle('online', profile.driver.online);
+      document.querySelector('#status-message').textContent = profile.driver.online
+        ? t.onlineStatus
+        : t.offlineStatus;
+      toggle.setAttribute('aria-checked', String(profile.driver.online));
+      toggle.setAttribute('aria-label', profile.driver.online ? t.goOffline : t.goOnline);
+      profile.online = profile.driver.online;
+      pendingOrders = profile.pendingOrders || [];
+      activeOrder = profile.activeOrder || null;
+      renderOffers();
+    }
+
+    function startDriverPolling() {
+      if (pollTimer) return;
+      pollTimer = window.setInterval(refreshProfile, 3000);
+      tickTimer = window.setInterval(updateCountdowns, 1000);
+    }
+
+    async function refreshProfile() {
+      if (busy || !localStorage.getItem(tokenKey)) return;
+      busy = true;
+      try {
+        profile = await request('/api/drivers/driverStatus');
+        renderProfile();
+        document.querySelector('#dashboard-error').textContent = '';
+      } catch (error) {
+        if (error.message.includes('authentication') || error.message.includes('token')) {
+          localStorage.removeItem(tokenKey);
+          registerPanel.hidden = false;
+          dashboard.hidden = true;
+        } else {
+          document.querySelector('#dashboard-error').textContent = localizedError(error.message);
+        }
+      } finally {
+        busy = false;
+      }
+    }
+
+    registerForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      registerButton.disabled = true;
+      document.querySelector('#register-error').textContent = '';
+      const formData = new FormData(registerForm);
+      try {
+        const data = await request('/api/drivers/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: formData.get('name'), vehicleType: formData.get('vehicleType') }),
+        });
+        localStorage.setItem(tokenKey, data.token);
+        sessionStorage.removeItem(driverNameDraftKey);
+        profile = {
+          driver: data.driver,
+          pendingOrders: [],
+          acceptedOrders: [],
+          activeOrder: null,
+        };
+        renderProfile();
+        startDriverPolling();
+        await refreshProfile();
+      } catch (error) {
+        document.querySelector('#register-error').textContent = localizedError(error.message);
+      } finally {
+        registerButton.disabled = false;
+      }
+    });
+
+    toggle.addEventListener('click', async () => {
+      toggle.disabled = true;
+      try {
+        await request('/api/drivers/driverStatus/presence', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ online: !profile.driver.online }),
+        });
+        await refreshProfile();
+      } catch (error) {
+        document.querySelector('#dashboard-error').textContent = localizedError(error.message);
+      } finally {
+        toggle.disabled = false;
+      }
+    });
+
+    async function acceptOffer(orderId, button) {
+      button.disabled = true;
+      try {
+        await request(`/api/drivers/driverStatus/pendingOrders/${encodeURIComponent(orderId)}/accept`, { method: 'POST' });
+        showToast(translations[currentLang].accepted(orderId));
+        await refreshProfile();
+      } catch (error) {
+        document.querySelector('#dashboard-error').textContent = localizedError(error.message);
+        await refreshProfile();
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    function requestCompleteOrder(orderId, button) {
+      pendingCompletion = { orderId, button };
+      completeOrderDialog.showModal();
+    }
+
+    async function completeActiveOrder(orderId, button) {
+      button.disabled = true;
+      try {
+        await request(`/api/drivers/driverStatus/orders/${encodeURIComponent(orderId)}/complete`, { method: 'POST' });
+        showToast(translations[currentLang].completed(orderId));
+        await refreshProfile();
+      } catch (error) {
+        document.querySelector('#dashboard-error').textContent = localizedError(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    cancelCompleteOrderButton.addEventListener('click', () => completeOrderDialog.close());
+    confirmCompleteOrderButton.addEventListener('click', async () => {
+      if (!pendingCompletion) return;
+      const { orderId, button } = pendingCompletion;
+      pendingCompletion = null;
+      completeOrderDialog.close();
+      await completeActiveOrder(orderId, button);
+    });
+    completeOrderDialog.addEventListener('close', () => { pendingCompletion = null; });
+
+    document.querySelector('#btn-en').addEventListener('click', () => setLanguage('en'));
+    document.querySelector('#btn-de').addEventListener('click', () => setLanguage('de'));
+    refreshVehicleSelect = enhanceSelect(document.querySelector('#vehicle-type'));
+    setLanguage(sessionStorage.getItem('appLang') === 'en' ? 'en' : 'de');
+
+    if (localStorage.getItem(tokenKey)) {
+      startDriverPolling();
+      refreshProfile();
+    }
+  </script>
+</body>
+</html>

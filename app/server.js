@@ -7,11 +7,14 @@ const initSqlJs = require('sql.js');
 const port = Number(process.env.PORT || 4174);
 const publicDirectory = path.join(__dirname, 'public');
 const bottleRates = { pet: 0.25, beer: 0.08, water: 0.15, can: 0.25 };
+const maxBottlesPerCategory = 50;
 const orderIdPattern = /^(?:[0-9]{4}|[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 const pickupSlots = new Set([
   '10:00-11:00', '11:00-12:00', '12:00-13:00', '13:00-14:00', '14:00-15:00',
   '15:00-16:00', '16:00-17:00', '17:00-18:00', '18:00-19:00',
 ]);
+const offerWindowSeconds = 60;
+const offerWindowMs = offerWindowSeconds * 1000;
 
 class ApiError extends Error {
   constructor(status, message) {
@@ -45,9 +48,23 @@ class LocalSqlitePool {
     if (!orderColumns.some((column) => column[1] === 'request_hash')) {
       database.run('ALTER TABLE pickup_orders ADD COLUMN request_hash TEXT');
     }
+    if (!orderColumns.some((column) => column[1] === 'assigned_driver_id')) {
+      database.run('ALTER TABLE pickup_orders ADD COLUMN assigned_driver_id TEXT');
+    }
+    if (!orderColumns.some((column) => column[1] === 'completed_at')) {
+      database.run('ALTER TABLE pickup_orders ADD COLUMN completed_at TEXT');
+    }
+    const offerColumns = database.exec('PRAGMA table_info(driver_order_offers)')[0].values;
+    if (!offerColumns.some((column) => column[1] === 'missed_at')) {
+      database.run('ALTER TABLE driver_order_offers ADD COLUMN missed_at TEXT');
+    }
+    database.run(
+      'CREATE INDEX IF NOT EXISTS pickup_orders_active_driver ON pickup_orders(assigned_driver_id, completed_at)',
+    );
     database.run(
       'CREATE UNIQUE INDEX IF NOT EXISTS pickup_orders_idempotency_key ON pickup_orders(idempotency_key) WHERE idempotency_key IS NOT NULL',
     );
+    database.run('UPDATE drivers SET online = 0');
     this.database = database;
     this.persist();
   }
@@ -208,8 +225,8 @@ function validateOrder(body) {
     if (!item || !Object.hasOwn(bottleRates, item.type) || seenTypes.has(item.type)) {
       throw new ApiError(400, 'Bottle category is invalid or duplicated');
     }
-    if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 1000) {
-      throw new ApiError(400, 'Bottle quantity must be an integer between 1 and 1000');
+    if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > maxBottlesPerCategory) {
+      throw new ApiError(400, `Bottle quantity must be an integer between 1 and ${maxBottlesPerCategory}`);
     }
     seenTypes.add(item.type);
     return { type: item.type, quantity: item.quantity, unitRefund: bottleRates[item.type] };
@@ -237,6 +254,7 @@ async function createOrder(request, response) {
   let id;
   let client;
   let duplicateOrder;
+  let notifiedDrivers = 0;
   try {
     client = await database.connect();
     try {
@@ -288,6 +306,26 @@ async function createOrder(request, response) {
             [id, item.type, item.quantity, item.unitRefund.toFixed(2)],
           );
         }
+        const onlineDrivers = await client.query(
+          `SELECT d.id
+           FROM drivers d
+           WHERE d.online = 1
+             AND NOT EXISTS (
+               SELECT 1 FROM pickup_orders o
+               WHERE o.assigned_driver_id = d.id AND o.completed_at IS NULL
+             )`,
+        );
+        const offeredAt = new Date();
+        const createdAt = offeredAt.toISOString();
+        const expiresAt = new Date(offeredAt.getTime() + offerWindowMs).toISOString();
+        for (const driver of onlineDrivers.rows) {
+          await client.query(
+            `INSERT INTO driver_order_offers (driver_id, order_id, status, created_at, expires_at)
+             VALUES ($1, $2, 'pending', $3, $4)`,
+            [driver.id, id, createdAt, expiresAt],
+          );
+        }
+        notifiedDrivers = onlineDrivers.rowCount;
         await client.query('COMMIT');
       }
     } catch (error) {
@@ -306,8 +344,333 @@ async function createOrder(request, response) {
 
   if (duplicateOrder) return sendJson(response, 200, { data: duplicateOrder });
   return sendJson(response, 201, {
-    data: { id, status: 'confirmed', pickupTimeSlot: order.pickupTimeSlot, totalRefund, items: order.items },
+    data: {
+      id,
+      status: 'confirmed',
+      pickupTimeSlot: order.pickupTimeSlot,
+      totalRefund,
+      items: order.items,
+      dispatch: { notifiedDrivers },
+    },
   });
+}
+
+function getBearerToken(request) {
+  const authorization = request.headers.authorization;
+  const match = typeof authorization === 'string' && /^Bearer ([0-9a-f-]{36})$/i.exec(authorization);
+  return match ? match[1] : null;
+}
+
+async function authenticateDriver(request) {
+  const token = getBearerToken(request);
+  if (!token) throw new ApiError(401, 'Driver authentication is required');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const result = await database.query(
+    'SELECT id, name, vehicle_type, online FROM drivers WHERE token_hash = $1',
+    [tokenHash],
+  );
+  if (!result.rowCount) throw new ApiError(401, 'Driver token is invalid');
+  return result.rows[0];
+}
+
+async function registerDriver(request, response) {
+  let body;
+  try {
+    body = await readJsonBody(request);
+  } catch (error) {
+    if (error instanceof ApiError) return sendJson(response, error.status, { error: error.message });
+    throw error;
+  }
+  const name = body && typeof body.name === 'string' ? body.name.trim() : '';
+  const namePattern = /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u;
+  const vehicleType = body && body.vehicleType;
+  if (!name || name.length > 100 || !namePattern.test(name.normalize('NFC'))) {
+    return sendJson(response, 400, { error: 'Driver name must contain 1–100 letters, spaces, apostrophes, or hyphens' });
+  }
+  if (!['cargo-bike', 'bike', 'car'].includes(vehicleType)) {
+    return sendJson(response, 400, { error: 'Vehicle type must be cargo-bike, bike, or car' });
+  }
+
+  const token = crypto.randomUUID();
+  const driver = { id: crypto.randomUUID(), name: name.normalize('NFC'), vehicleType };
+  try {
+    await database.query(
+      'INSERT INTO drivers (id, name, vehicle_type, token_hash) VALUES ($1, $2, $3, $4)',
+      [driver.id, driver.name, vehicleType, crypto.createHash('sha256').update(token).digest('hex')],
+    );
+    return sendJson(response, 201, { data: { driver: { ...driver, online: false }, token } });
+  } catch (error) {
+    console.error('Failed to register driver:', error);
+    return sendJson(response, 503, { error: 'Driver registration is unavailable' });
+  }
+}
+
+async function getDriverOffers(driverId) {
+  const now = new Date().toISOString();
+  await database.query(
+    "UPDATE driver_order_offers SET status = 'expired', missed_at = $2 WHERE driver_id = $1 AND status = 'pending' AND expires_at <= $2",
+    [driverId, now],
+  );
+  const result = await database.query(
+    `SELECT o.id, o.street, o.zip_code, o.pickup_time_slot, o.created_at AS order_created_at,
+            f.created_at AS offered_at, f.expires_at, f.missed_at, f.status,
+            group_concat(i.bottle_type || ':' || i.quantity, ',') AS items
+     FROM driver_order_offers f
+     JOIN pickup_orders o ON o.id = f.order_id
+     LEFT JOIN pickup_order_items i ON i.order_id = o.id
+     WHERE f.driver_id = $1 AND f.status = 'pending' AND o.assigned_driver_id IS NULL
+     GROUP BY o.id
+     ORDER BY f.created_at DESC`,
+    [driverId],
+  );
+  return result.rows.map((row) => formatDriverOffer(row));
+}
+
+async function getMissedDriverOrders(driverId) {
+  const result = await database.query(
+    `SELECT o.id, o.street, o.zip_code, o.pickup_time_slot, o.created_at AS order_created_at,
+            f.created_at AS offered_at, f.expires_at, f.missed_at,
+            group_concat(i.bottle_type || ':' || i.quantity, ',') AS items
+     FROM driver_order_offers f
+     JOIN pickup_orders o ON o.id = f.order_id
+     LEFT JOIN pickup_order_items i ON i.order_id = o.id
+     WHERE f.driver_id = $1 AND f.missed_at IS NOT NULL
+     GROUP BY o.id
+     ORDER BY f.missed_at DESC`,
+    [driverId],
+  );
+  return result.rows.map((row) => formatDriverOffer(row, 'missed'));
+}
+
+function formatDriverOffer(row, status = row.status) {
+  const address = `${row.street}, ${row.zip_code}, Germany`;
+  return {
+    id: row.id,
+    address,
+    pickupTimeSlot: row.pickup_time_slot,
+    createdAt: row.order_created_at,
+    offeredAt: row.offered_at,
+    expiresAt: row.expires_at,
+    ...(row.missed_at ? { missedAt: row.missed_at } : {}),
+    status,
+    items: row.items ? row.items.split(',').map((item) => {
+      const [type, quantity] = item.split(':');
+      return { type, quantity: Number(quantity) };
+    }) : [],
+    mapsUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`,
+  };
+}
+
+async function getActiveDriverOrder(driverId) {
+  const result = await database.query(
+    `SELECT o.id, o.street, o.zip_code, o.pickup_time_slot, o.created_at AS order_created_at,
+            group_concat(i.bottle_type || ':' || i.quantity, ',') AS items
+     FROM pickup_orders o
+     LEFT JOIN pickup_order_items i ON i.order_id = o.id
+     WHERE o.assigned_driver_id = $1 AND o.completed_at IS NULL
+     GROUP BY o.id
+     ORDER BY o.created_at
+     LIMIT 1`,
+    [driverId],
+  );
+  if (!result.rowCount) return null;
+  const row = result.rows[0];
+  const address = `${row.street}, ${row.zip_code}, Germany`;
+  return {
+    id: row.id,
+    address,
+    pickupTimeSlot: row.pickup_time_slot,
+    createdAt: row.order_created_at,
+    status: 'accepted',
+    items: row.items ? row.items.split(',').map((item) => {
+      const [type, quantity] = item.split(':');
+      return { type, quantity: Number(quantity) };
+    }) : [],
+    mapsUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`,
+  };
+}
+
+async function getCompletedDriverOrders(driverId) {
+  const result = await database.query(
+    `SELECT o.id, o.street, o.zip_code, o.pickup_time_slot, o.created_at AS order_created_at,
+            o.completed_at,
+            group_concat(i.bottle_type || ':' || i.quantity, ',') AS items
+     FROM pickup_orders o
+     LEFT JOIN pickup_order_items i ON i.order_id = o.id
+     WHERE o.assigned_driver_id = $1 AND o.completed_at IS NOT NULL
+     GROUP BY o.id
+     ORDER BY o.completed_at DESC`,
+    [driverId],
+  );
+  return result.rows.map((row) => {
+    const address = `${row.street}, ${row.zip_code}, Germany`;
+    return {
+      id: row.id,
+      address,
+      pickupTimeSlot: row.pickup_time_slot,
+      createdAt: row.order_created_at,
+      completedAt: row.completed_at,
+      status: 'completed',
+      items: row.items ? row.items.split(',').map((item) => {
+        const [type, quantity] = item.split(':');
+        return { type, quantity: Number(quantity) };
+      }) : [],
+      mapsUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`,
+    };
+  });
+}
+
+async function getDriverProfile(request, response) {
+  try {
+    const driver = await authenticateDriver(request);
+    const availableOrders = await getDriverOffers(driver.id);
+    const missedOrders = await getMissedDriverOrders(driver.id);
+    const pendingOrders = driver.online ? availableOrders : [];
+    return sendJson(response, 200, {
+      data: {
+        driver: {
+          id: driver.id,
+          name: driver.name,
+          vehicleType: driver.vehicle_type,
+          online: Boolean(driver.online),
+        },
+        pendingOrders,
+        acceptedOrders: await getCompletedDriverOrders(driver.id),
+        missedOrders,
+        activeOrder: await getActiveDriverOrder(driver.id),
+      },
+    });
+  } catch (error) {
+    if (error instanceof ApiError) return sendJson(response, error.status, { error: error.message });
+    console.error('Failed to retrieve driver profile:', error);
+    return sendJson(response, 503, { error: 'Driver service is unavailable' });
+  }
+}
+
+async function setDriverPresence(request, response) {
+  let body;
+  try {
+    body = await readJsonBody(request);
+    if (!body || typeof body.online !== 'boolean') {
+      return sendJson(response, 400, { error: 'online must be true or false' });
+    }
+    const driver = await authenticateDriver(request);
+    const client = await database.connect();
+    try {
+      await client.query('BEGIN IMMEDIATE');
+      await client.query('UPDATE drivers SET online = $1 WHERE id = $2', [body.online ? 1 : 0, driver.id]);
+      if (!body.online) {
+        const now = new Date().toISOString();
+        await client.query(
+          `UPDATE driver_order_offers
+           SET status = 'expired', missed_at = CASE WHEN expires_at <= $2 THEN $2 ELSE missed_at END
+           WHERE driver_id = $1 AND status = 'pending'`,
+          [driver.id, now],
+        );
+      }
+      await client.query('COMMIT');
+    } finally {
+      client.release();
+    }
+    return sendJson(response, 200, { data: { online: body.online } });
+  } catch (error) {
+    if (error instanceof ApiError) return sendJson(response, error.status, { error: error.message });
+    console.error('Failed to update driver presence:', error);
+    return sendJson(response, 503, { error: 'Driver presence is unavailable' });
+  }
+}
+
+async function acceptDriverOffer(request, response, orderId) {
+  let driver;
+  try {
+    driver = await authenticateDriver(request);
+  } catch (error) {
+    if (error instanceof ApiError) return sendJson(response, error.status, { error: error.message });
+    console.error('Failed to authenticate driver:', error);
+    return sendJson(response, 503, { error: 'Driver service is unavailable' });
+  }
+  const client = await database.connect();
+  try {
+    await client.query('BEGIN IMMEDIATE');
+    const now = new Date().toISOString();
+    const activeOrder = await client.query(
+      'SELECT id FROM pickup_orders WHERE assigned_driver_id = $1 AND completed_at IS NULL LIMIT 1',
+      [driver.id],
+    );
+    if (activeOrder.rowCount) {
+      await client.query('ROLLBACK');
+      return sendJson(response, 409, { error: 'You already have an active order' });
+    }
+    const expiredOffer = await client.query(
+      "UPDATE driver_order_offers SET status = 'expired', missed_at = $3 WHERE driver_id = $1 AND order_id = $2 AND status = 'pending' AND expires_at <= $3",
+      [driver.id, orderId, now],
+    );
+    const offer = await client.query(
+      `SELECT f.status, f.expires_at, d.online, o.assigned_driver_id
+       FROM driver_order_offers f
+       JOIN drivers d ON d.id = f.driver_id
+       JOIN pickup_orders o ON o.id = f.order_id
+       WHERE f.driver_id = $1 AND f.order_id = $2`,
+      [driver.id, orderId],
+    );
+    if (!offer.rowCount || offer.rows[0].status !== 'pending' || !offer.rows[0].online ||
+        offer.rows[0].expires_at <= now || offer.rows[0].assigned_driver_id) {
+      await client.query(expiredOffer.rowCount ? 'COMMIT' : 'ROLLBACK');
+      return sendJson(response, 409, { error: 'This order is no longer available to accept' });
+    }
+    await client.query('UPDATE pickup_orders SET assigned_driver_id = $1 WHERE id = $2', [driver.id, orderId]);
+    await client.query(
+      "UPDATE driver_order_offers SET status = CASE WHEN driver_id = $1 THEN 'accepted' ELSE 'unavailable' END WHERE order_id = $2 AND status = 'pending'",
+      [driver.id, orderId],
+    );
+    await client.query(
+      "UPDATE driver_order_offers SET status = 'unavailable' WHERE driver_id = $1 AND status = 'pending'",
+      [driver.id],
+    );
+    await client.query('COMMIT');
+    return sendJson(response, 200, { data: { orderId, status: 'accepted' } });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Failed to accept driver offer:', error);
+    return sendJson(response, 503, { error: 'Could not accept this order' });
+  } finally {
+    client.release();
+  }
+}
+
+async function completeDriverOrder(request, response, orderId) {
+  let driver;
+  try {
+    driver = await authenticateDriver(request);
+  } catch (error) {
+    if (error instanceof ApiError) return sendJson(response, error.status, { error: error.message });
+    console.error('Failed to authenticate driver:', error);
+    return sendJson(response, 503, { error: 'Driver service is unavailable' });
+  }
+  const client = await database.connect();
+  try {
+    await client.query('BEGIN IMMEDIATE');
+    const activeOrder = await client.query(
+      'SELECT id FROM pickup_orders WHERE id = $1 AND assigned_driver_id = $2 AND completed_at IS NULL',
+      [orderId, driver.id],
+    );
+    if (!activeOrder.rowCount) {
+      await client.query('ROLLBACK');
+      return sendJson(response, 409, { error: 'This is not your active order' });
+    }
+    await client.query(
+      'UPDATE pickup_orders SET completed_at = $1 WHERE id = $2 AND assigned_driver_id = $3 AND completed_at IS NULL',
+      [new Date().toISOString(), orderId, driver.id],
+    );
+    await client.query('COMMIT');
+    return sendJson(response, 200, { data: { orderId, status: 'completed' } });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Failed to complete driver order:', error);
+    return sendJson(response, 503, { error: 'Could not complete this order' });
+  } finally {
+    client.release();
+  }
 }
 
 async function readOrder(client, id) {
@@ -427,6 +790,28 @@ async function handleRequest(request, response) {
   if (url.pathname.startsWith('/api/') && !isAllowedApiOrigin(request)) {
     return sendJson(response, 403, { error: 'Cross-origin API requests are not allowed' });
   }
+  if (url.pathname === '/api/drivers/register') {
+    if (request.method !== 'POST') return sendJson(response, 405, { error: 'Method not allowed' });
+    return registerDriver(request, response);
+  }
+  if (url.pathname === '/api/drivers/driverStatus') {
+    if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });
+    return getDriverProfile(request, response);
+  }
+  if (url.pathname === '/api/drivers/driverStatus/presence') {
+    if (request.method !== 'PATCH') return sendJson(response, 405, { error: 'Method not allowed' });
+    return setDriverPresence(request, response);
+  }
+  const completeMatch = /^\/api\/drivers\/driverStatus\/orders\/([0-9]{4}|[0-9a-f-]{36})\/complete$/i.exec(url.pathname);
+  if (completeMatch) {
+    if (request.method !== 'POST') return sendJson(response, 405, { error: 'Method not allowed' });
+    return completeDriverOrder(request, response, completeMatch[1]);
+  }
+  const acceptMatch = /^\/api\/drivers\/driverStatus\/pendingOrders\/([0-9]{4}|[0-9a-f-]{36})\/accept$/i.exec(url.pathname);
+  if (acceptMatch) {
+    if (request.method !== 'POST') return sendJson(response, 405, { error: 'Method not allowed' });
+    return acceptDriverOffer(request, response, acceptMatch[1]);
+  }
   if (url.pathname === '/api/orders' && request.method === 'GET') return listOrders(response);
   if (url.pathname === '/api/orders' && request.method === 'POST') return createOrder(request, response);
   if (url.pathname.startsWith('/api/orders/')) {
@@ -438,6 +823,7 @@ async function handleRequest(request, response) {
     return serveAsset(response, 'index.html');
   }
   if (url.pathname === '/orders' || url.pathname === '/orders.html') return serveAsset(response, 'orders.html');
+  if (url.pathname === '/driver' || url.pathname === '/driver.html') return serveAsset(response, 'driver.html');
   if (url.pathname === '/70b82787-b394-4168-9124-f1244fcbb843.png') {
     return serveAsset(response, '70b82787-b394-4168-9124-f1244fcbb843.png');
   }

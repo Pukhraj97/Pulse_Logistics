@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
@@ -22,6 +22,116 @@ async function findAvailablePort() {
 }
 
 test.describe('Pulse Logistics pickup orders', () => {
+  test('animates quantity controls without allowing a quantity below one', async ({ page }) => {
+    await page.goto('/');
+
+    const decrease = page.getByRole('button', { name: 'Decrease quantity' });
+    const increase = page.getByRole('button', { name: 'Increase quantity' });
+    const quantity = page.locator('#qty');
+
+    await decrease.click();
+    await expect(quantity).toHaveValue('1');
+    await expect(decrease).toHaveClass(/qty-animating/);
+    await expect(decrease).not.toHaveClass(/qty-animating/);
+
+    await increase.click();
+    await expect(quantity).toHaveValue('2');
+    await expect(increase).toHaveClass(/qty-animating/);
+  });
+
+  test('shows two-digit quantities and caps each bottle category at 50', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+
+    const quantity = page.locator('#qty');
+    const increase = page.getByRole('button', { name: 'Increase quantity' });
+    await expect(quantity).toHaveCSS('padding', '0px');
+    for (let count = 1; count < 10; count += 1) await increase.click();
+    await expect(quantity).toHaveValue('10');
+    await increase.evaluate((button) => {
+      for (let count = 10; count < 50; count += 1) (button as HTMLButtonElement).click();
+    });
+    await expect(quantity).toHaveValue('50');
+    await increase.click();
+    await expect(quantity).toHaveValue('50');
+
+    await page.getByRole('button', { name: 'Add to Order' }).click();
+    await expect(page.getByText('50x PET Plastic Bottle (€0.25)')).toBeVisible();
+  });
+
+  test('shows rounded custom menus for bottle type and pickup time', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+
+    await page.getByRole('combobox', { name: 'Select Bottle Category' }).click();
+    await expect(page.locator('#bottleType-options')).toHaveCSS('border-radius', '12px');
+    await page.getByRole('option', { name: 'Glass Beer Bottle (€0.08)' }).click();
+    await expect(page.getByRole('combobox', { name: 'Select Bottle Category' })).toContainText('Glass Beer Bottle');
+
+    await page.getByRole('button', { name: 'Add to Order' }).click();
+    await page.getByRole('button', { name: 'Proceed to Address' }).click();
+    const timeSlot = page.getByRole('combobox', { name: 'Pickup Time Slot *' });
+    await timeSlot.click();
+    await expect(page.locator('#timeSlot-options')).toHaveCSS('border-radius', '12px');
+    await timeSlot.press('ArrowDown');
+    await timeSlot.press('Enter');
+    await expect(timeSlot).toContainText('10:00–11:00');
+  });
+
+  test('preserves the selected Consumer app language after reload', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '1. Bottle Selection' })).toBeVisible();
+    await page.reload();
+
+    await expect(page.getByRole('button', { name: 'EN', exact: true })).toHaveClass(/active/);
+    await expect(page.getByRole('button', { name: 'DE', exact: true })).not.toHaveClass(/active/);
+    await expect(page.getByRole('heading', { name: '1. Bottle Selection' })).toBeVisible();
+  });
+
+  test('selecting Aluminum Can adds a can instead of PET bottles', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+    const bottleType = page.getByRole('combobox', { name: 'Select Bottle Category' });
+    await bottleType.click();
+    await page.getByRole('option', { name: 'Aluminum Can (€0.25)' }).click();
+
+    await expect(bottleType).toContainText('Aluminum Can');
+    await expect(page.locator('#bottleType')).toHaveValue('can');
+    await page.getByRole('button', { name: 'Add to Order' }).click();
+    await expect(page.getByText('1x Aluminum Can (€0.25)')).toBeVisible();
+    await expect(page.getByText('1x PET Plastic Bottle (€0.25)')).toHaveCount(0);
+  });
+
+  test('hovering over a cart remove button does not reveal a horizontal scrollbar', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+    const bottleType = page.getByRole('combobox', { name: 'Select Bottle Category' });
+    await bottleType.click();
+    await page.getByRole('option', { name: 'Aluminum Can (€0.25)' }).click();
+    for (let quantity = 1; quantity < 6; quantity += 1) {
+      await page.getByRole('button', { name: 'Increase quantity' }).click();
+    }
+    await page.getByRole('button', { name: 'Add to Order' }).click();
+
+    const cart = page.locator('#itemList');
+    await expect(cart.locator('.item-row')).toBeVisible();
+    const dimensionsBeforeHover = await cart.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    await page.getByRole('button', { name: 'Remove item' }).hover();
+    const dimensionsAfterHover = await cart.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+
+    expect(dimensionsBeforeHover.scrollWidth).toBeLessThanOrEqual(dimensionsBeforeHover.clientWidth);
+    expect(dimensionsAfterHover.scrollWidth).toBeLessThanOrEqual(dimensionsAfterHover.clientWidth);
+  });
+
   test('browser Back returns from delivery details to bottle selection', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'EN', exact: true }).click();
@@ -65,12 +175,16 @@ test.describe('Pulse Logistics pickup orders', () => {
     await page.locator('.qty-btn').nth(1).click();
     await page.getByRole('button', { name: 'Add to Order' }).click();
     await page.getByRole('button', { name: 'Proceed to Address' }).click();
+    await expect(page.locator('#timeSlot')).toHaveValue('');
+    await expect(page.getByRole('combobox', { name: 'Pickup Time Slot *' })).toContainText('Select a pickup time');
     await page.getByLabel('First Name *').fill('Alex');
     await page.getByLabel('Last Name *').fill('Example');
     await page.getByLabel('Street & House Number *').fill('Main Street 1');
     await page.getByLabel('ZIP Code (PLZ) *').fill('10115');
     await page.getByLabel('Mobile Phone Number *').fill('+49 151 12345678');
-    await page.getByLabel('Pickup Time Slot *').selectOption('10:00-11:00');
+    await page.getByLabel('IBAN *').fill('DE89370400440532013000');
+    await page.getByRole('combobox', { name: 'Pickup Time Slot *' }).click();
+    await page.getByRole('option', { name: '10:00–11:00' }).click();
     await page.getByRole('button', { name: 'Confirm Pickup' }).click();
 
     await expect(page.getByRole('heading', { name: 'Order Confirmed!' })).toBeVisible();
@@ -80,11 +194,24 @@ test.describe('Pulse Logistics pickup orders', () => {
       'Thank you. Your doorstep Pfand pickup request has been scheduled.\n\n' +
         'A cargo bike courier will arrive during your selected window.\n\n' +
         'Selected pickup time: 10:00–11:00.\n\n' +
-        'Order reference: 1234.',
+        'Order reference: 1234.\n\n' +
+        'The payment will be sent to the IBAN you provided within 24 hours.',
     );
     await expect(page.locator('#t-step3-msg-pickup-value')).toHaveText('10:00–11:00.');
     await expect(page.locator('#t-step3-msg-order-value')).toHaveText('1234.');
-    await expect(page.locator('#t-step3-msg strong')).toHaveCount(2);
+    const paymentLine = page.locator('#t-step3-msg-payment');
+    await expect(paymentLine).toHaveText(
+      'The payment will be sent to the IBAN you provided within 24 hours.',
+    );
+    await expect(paymentLine.locator('strong')).toHaveText(['IBAN', '24 hours']);
+    await expect(paymentLine.locator('strong').nth(0)).toHaveCSS('font-weight', '700');
+    await page.getByRole('button', { name: 'DE', exact: true }).click();
+    await expect(paymentLine).toHaveText(
+      'Die Zahlung wird innerhalb von 24 Stunden auf die von Ihnen angegebene IBAN überwiesen.',
+    );
+    await expect(paymentLine.locator('strong')).toHaveText(['24 Stunden', 'IBAN']);
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+    await expect(page.locator('#t-step3-msg strong')).toHaveCount(4);
     await page.goBack();
     await expect(page.getByRole('dialog')).toContainText(
       'Your Order is Confirmed! You can Schedule a new order by clicking on "Schedule Another Pickup"',
@@ -93,6 +220,10 @@ test.describe('Pulse Logistics pickup orders', () => {
     await expect(page.getByRole('heading', { name: 'Order Confirmed!' })).toBeVisible();
     await page.getByRole('button', { name: 'Schedule Another Pickup' }).click();
     await expect(page.getByRole('heading', { name: '1. Bottle Selection' })).toBeVisible();
+    await page.getByRole('button', { name: 'Add to Order' }).click();
+    await page.getByRole('button', { name: 'Proceed to Address' }).click();
+    await expect(page.locator('#timeSlot')).toHaveValue('');
+    await expect(page.getByRole('combobox', { name: 'Pickup Time Slot *' })).toContainText('Select a pickup time');
     await page.goBack();
     await expect(page.getByRole('heading', { name: '1. Bottle Selection' })).toBeVisible();
     expect(await page.locator('#fname').getAttribute('maxlength')).toBe('100');
@@ -268,7 +399,9 @@ test.describe('Pulse Logistics pickup orders', () => {
     await page.getByLabel('Street & House Number *').fill('Main Street 1');
     await page.getByLabel('ZIP Code (PLZ) *').fill('10115');
     await page.getByLabel('Mobile Phone Number *').fill('+49 151 12345678');
-    await page.getByLabel('Pickup Time Slot *').selectOption('10:00-11:00');
+    await page.getByLabel('IBAN *').fill('DE89370400440532013000');
+    await page.getByRole('combobox', { name: 'Pickup Time Slot *' }).click();
+    await page.getByRole('option', { name: '10:00–11:00' }).click();
     await page.getByRole('button', { name: 'Confirm Pickup' }).click();
 
     await expect(page.getByRole('alert')).toHaveText('Order storage is unavailable');
@@ -377,7 +510,7 @@ test.describe('Pulse Logistics pickup orders', () => {
           phone: '123456',
         },
         pickupTimeSlot: '10:00-11:00',
-        items: [{ type: 'pet', quantity: 1000 }],
+        items: [{ type: 'pet', quantity: 50 }],
       },
     });
     expect(response.status()).toBe(201);
@@ -386,8 +519,9 @@ test.describe('Pulse Logistics pickup orders', () => {
         id: expect.stringMatching(/^[0-9]{4}$/),
         status: 'confirmed',
         pickupTimeSlot: '10:00-11:00',
-        totalRefund: '250.00',
-        items: [{ type: 'pet', quantity: 1000, unitRefund: 0.25 }],
+        totalRefund: '12.50',
+        items: [{ type: 'pet', quantity: 50, unitRefund: 0.25 }],
+        dispatch: { notifiedDrivers: 0 },
       },
     });
   });
@@ -427,6 +561,396 @@ test.describe('Pulse Logistics pickup orders', () => {
       items: [{ type: 'beer', quantity: 3, unitRefund: 0.08 }],
     }));
     expect(retrieved).not.toHaveProperty('customer');
+  });
+
+  test('dispatches new orders to online drivers and allows only one driver to accept', async ({ page }) => {
+    const port = await findAvailablePort();
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    const databasePath = path.join(process.cwd(), 'test-results', `drivers-${randomUUID()}.sqlite`);
+    const serverPath = path.join(process.cwd(), 'app', 'server.js');
+    const startServer = () => spawn(process.execPath, [serverPath], {
+      cwd: process.cwd(),
+      env: { ...process.env, PORT: String(port), PULSE_DB_PATH: databasePath },
+      stdio: 'ignore',
+    });
+    const waitForServer = async (child: ReturnType<typeof startServer>) => {
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if (child.exitCode !== null) throw new Error(`Test server exited with code ${child.exitCode}`);
+        try {
+          if ((await fetch(`${baseUrl}/health`)).ok) return;
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      }
+      throw new Error('Test server did not become ready');
+    };
+    const stopServer = async (child: ReturnType<typeof startServer>) => {
+      if (child.exitCode !== null) return;
+      const exited = once(child, 'exit');
+      child.kill();
+      await exited;
+    };
+    const callApi = async (route: string, method: string, body?: unknown, token?: string) => {
+      const response = await fetch(`${baseUrl}${route}`, {
+        method,
+        headers: {
+          ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(route === '/api/orders' ? { 'Idempotency-Key': randomUUID() } : {}),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      return { status: response.status, data: await response.json() };
+    };
+
+    let child = startServer();
+    try {
+      await waitForServer(child);
+      const register = async (name: string) => {
+        const response = await callApi('/api/drivers/register', 'POST', { name, vehicleType: 'cargo-bike' });
+        expect(response.status).toBe(201);
+        return response.data.data;
+      };
+      const first = await register('Courier One');
+      const second = await register('Courier Two');
+      await page.goto(`${baseUrl}/driver`);
+      await expect(page.locator('.brand-title')).toHaveText('PULSE LOGISTICS');
+      await expect(page.locator('.brand-mark')).toHaveCount(0);
+      await expect(page.getByRole('link', { name: /Consumer app/ })).toHaveCount(0);
+      await expect(page.locator('#vehicle-type option')).toHaveText(['Lastenrad', 'Fahrrad']);
+      await expect(page.getByRole('button', { name: 'EN', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'DE', exact: true })).toBeVisible();
+      await expect(page.locator('#register-title')).toHaveText('Als Fahrer registrieren');
+      await page.getByRole('button', { name: 'EN', exact: true }).click();
+      await expect(page.locator('#register-title')).toHaveText('Join as a driver');
+      await expect(page.locator('#vehicle-type option')).toHaveText(['Cargo bike', 'Bicycle']);
+      const vehicleControl = page.locator('#vehicle-type-control');
+      await expect(vehicleControl).toHaveAttribute('role', 'combobox');
+      await expect(vehicleControl).toHaveText('Cargo bike');
+      const dropdownStyle = await vehicleControl.evaluate((control) => {
+        const style = getComputedStyle(control);
+        const chevron = getComputedStyle(control, '::after');
+        const bounds = control.getBoundingClientRect();
+        const contentHeight = bounds.height - Number.parseFloat(style.borderTopWidth) -
+          Number.parseFloat(style.borderBottomWidth);
+        const chevronTop = chevron.top.endsWith('%')
+          ? Number.parseFloat(chevron.top) * contentHeight / 100
+          : Number.parseFloat(chevron.top);
+        return {
+          height: control.getBoundingClientRect().height,
+          borderRadius: style.borderRadius,
+          fontWeight: style.fontWeight,
+          position: style.position,
+          chevronRight: chevron.right,
+          chevronWidth: chevron.width,
+          chevronHeight: chevron.height,
+          chevronCentered: Math.abs(chevronTop - contentHeight / 2) <= 0.5,
+        };
+      });
+      expect(dropdownStyle.height).toBeGreaterThanOrEqual(42);
+      expect(dropdownStyle.borderRadius).toBe('12px');
+      expect(dropdownStyle.fontWeight).toBe('700');
+      expect(dropdownStyle.position).toBe('relative');
+      expect(dropdownStyle.chevronRight).toBe('15px');
+      expect(dropdownStyle.chevronWidth).toBe('8px');
+      expect(dropdownStyle.chevronHeight).toBe('8px');
+      expect(dropdownStyle.chevronCentered).toBe(true);
+      await vehicleControl.click();
+      await expect(page.locator('#vehicle-type-options')).toBeVisible();
+      const selectedOptionStyle = await page.locator('#vehicle-type-option-0').evaluate((option) => {
+        const style = getComputedStyle(option);
+        return { color: style.color, backgroundColor: style.backgroundColor };
+      });
+      expect(selectedOptionStyle).toEqual({
+        color: 'rgb(74, 141, 82)',
+        backgroundColor: 'rgb(232, 244, 229)',
+      });
+      await page.locator('#vehicle-type-option-1').click();
+      await expect(page.locator('#vehicle-type-options')).toBeHidden();
+      await expect(page.locator('#vehicle-type')).toHaveValue('bike');
+      await expect(vehicleControl).toHaveText('Bicycle');
+      await page.getByRole('button', { name: 'DE', exact: true }).click();
+      await expect(page.locator('#register-title')).toHaveText('Als Fahrer registrieren');
+      await expect(vehicleControl).toHaveText('Fahrrad');
+      await page.getByRole('button', { name: 'EN', exact: true }).click();
+      await expect(vehicleControl).toHaveText('Bicycle');
+      await page.locator('#driver-name').fill('Jacob');
+      await page.reload();
+      await expect(page.locator('#driver-name')).toHaveValue('Jacob');
+      const driverStatusResponsePromise = page.waitForResponse((response) =>
+        new URL(response.url()).pathname === '/api/drivers/driverStatus');
+      await page.locator('#register-button').click();
+      const driverStatusResponse = await driverStatusResponsePromise;
+      expect(driverStatusResponse.status()).toBe(200);
+      await expect(page.locator('#dashboard')).toBeVisible();
+      await expect(page.locator('#register-panel')).toBeHidden();
+      await expect(page.locator('#driver-profile-name')).toContainText('Jacob');
+      const nextDriverStatusRequest = await page.waitForRequest((request) =>
+        new URL(request.url()).pathname === '/api/drivers/driverStatus', { timeout: 5000 });
+      expect(nextDriverStatusRequest.method()).toBe('GET');
+      for (const width of [360, 420, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(`${baseUrl}/driver`);
+        const driverLogo = await page.locator('.brand-title').evaluate((logo) => {
+          const style = getComputedStyle(logo);
+          const box = logo.getBoundingClientRect();
+          const header = document.querySelector('header')!.getBoundingClientRect();
+          return {
+            style: {
+              fontFamily: style.fontFamily,
+              fontSize: style.fontSize,
+              fontWeight: style.fontWeight,
+              color: style.color,
+              letterSpacing: style.letterSpacing,
+              textShadow: style.textShadow,
+              textAlign: style.textAlign,
+            },
+            left: box.left,
+            topSpacing: box.top - header.top,
+            bottomSpacing: header.bottom - box.bottom,
+            headerHeight: header.height,
+          };
+        });
+        await page.goto(`${baseUrl}/`);
+        const consumerLogo = await page.locator('.brand-title').evaluate((logo) => {
+          const style = getComputedStyle(logo);
+          const box = logo.getBoundingClientRect();
+          const header = document.querySelector('header')!.getBoundingClientRect();
+          return {
+            style: {
+              fontFamily: style.fontFamily,
+              fontSize: style.fontSize,
+              fontWeight: style.fontWeight,
+              color: style.color,
+              letterSpacing: style.letterSpacing,
+              textShadow: style.textShadow,
+              textAlign: style.textAlign,
+            },
+            left: box.left,
+            headerHeight: header.height,
+          };
+        });
+        expect(driverLogo.style).toEqual(consumerLogo.style);
+        expect(driverLogo.left).toBe(consumerLogo.left);
+        expect(driverLogo.headerHeight).toBe(consumerLogo.headerHeight);
+        expect(Math.abs(driverLogo.topSpacing - driverLogo.bottomSpacing)).toBeLessThanOrEqual(1);
+      }
+      expect((await callApi('/api/drivers/driverStatus', 'GET')).status).toBe(401);
+      for (const token of [first.token, second.token]) {
+        const online = await callApi('/api/drivers/driverStatus/presence', 'PATCH', { online: true }, token);
+        expect(online).toEqual({ status: 200, data: { data: { online: true } } });
+      }
+
+      const createdResponse = await callApi('/api/orders', 'POST', {
+        customer: {
+          firstName: 'Map',
+          lastName: 'Pickup',
+          street: 'Main Street 1',
+          zipCode: '10115',
+          phone: '+49 151 12345678',
+        },
+        pickupTimeSlot: '12:00-13:00',
+        items: [{ type: 'pet', quantity: 2 }],
+      });
+      expect(createdResponse.status).toBe(201);
+      const created = createdResponse.data.data;
+      expect(created.dispatch).toEqual({ notifiedDrivers: 2 });
+
+      const firstProfile = await callApi('/api/drivers/driverStatus', 'GET', undefined, first.token);
+      const secondProfile = await callApi('/api/drivers/driverStatus', 'GET', undefined, second.token);
+      const firstOffer = firstProfile.data.data.pendingOrders.find((offer: { id: string }) => offer.id === created.id);
+      expect(firstOffer).toEqual(expect.objectContaining({
+        id: created.id,
+        address: 'Main Street 1, 10115, Germany',
+        mapsUrl: 'https://www.google.com/maps/dir/?api=1&destination=Main%20Street%201%2C%2010115%2C%20Germany',
+      }));
+      expect(firstProfile.data.data.acceptedOrders).toEqual([]);
+      expect(firstProfile.data.data.missedOrders).toEqual([]);
+      expect(Date.parse(firstOffer.expiresAt) - Date.parse(firstOffer.offeredAt)).toBe(60_000);
+      expect(secondProfile.data.data.pendingOrders.some((offer: { id: string }) => offer.id === created.id)).toBe(true);
+
+      await page.addInitScript((token) => localStorage.setItem('pulse-driver-token', token), first.token);
+      await page.goto(`${baseUrl}/driver`);
+      await page.getByRole('button', { name: 'EN', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Your requests' })).toBeVisible();
+      const switchSize = await page.locator('#presence-toggle').evaluate((button) => {
+        const bounds = button.getBoundingClientRect();
+        const knob = getComputedStyle(button, '::after');
+        return {
+          width: bounds.width,
+          height: bounds.height,
+          padding: getComputedStyle(button).padding,
+          knobWidth: knob.width,
+          knobHeight: knob.height,
+        };
+      });
+      expect(switchSize).toEqual({
+        width: 56,
+        height: 32,
+        padding: '0px',
+        knobWidth: '24px',
+        knobHeight: '24px',
+      });
+      const targetOffer = page.locator('.offer').filter({ hasText: `Pickup #${created.id}` });
+      await expect(targetOffer).toBeVisible();
+      await expect(targetOffer.getByRole('progressbar')).toHaveAttribute('aria-valuemax', '60');
+      await expect(targetOffer.getByRole('link', { name: /Open pickup in Google Maps/ })).toHaveAttribute(
+        'href',
+        firstOffer.mapsUrl,
+      );
+      await page.getByRole('button', { name: 'DE', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Ihre Anfragen' })).toBeVisible();
+      await expect(page.getByText('Sie sind online')).toBeVisible();
+      const germanOffer = page.locator('.offer').filter({ hasText: `Abholung #${created.id}` });
+      await expect(germanOffer.getByRole('button', { name: 'Abholung annehmen' })).toBeVisible();
+      await expect(germanOffer.getByRole('link', { name: /Abholadresse in Google Maps öffnen/ })).toBeVisible();
+      await page.getByRole('button', { name: 'EN', exact: true }).click();
+      await targetOffer.getByRole('button', { name: 'Accept pickup' }).click();
+      await expect(page.getByRole('status')).toContainText(`Pickup #${created.id} accepted`);
+
+      const activeCard = page.locator('.active-order').filter({ hasText: `Active pickup #${created.id}` });
+      await expect(activeCard).toBeVisible();
+      await expect(activeCard.getByRole('button', { name: 'Complete pickup' })).toBeVisible();
+      await page.reload();
+      await expect(page.getByRole('heading', { name: 'Your requests' })).toBeVisible();
+      await expect(activeCard).toBeVisible();
+      await page.waitForTimeout(1100);
+      await expect(activeCard.locator('.countdown')).toHaveText('Accepted');
+      expect(pageErrors).toEqual([]);
+
+      const unavailable = await callApi(
+        `/api/drivers/driverStatus/pendingOrders/${created.id}/accept`,
+        'POST',
+        undefined,
+        second.token,
+      );
+      expect(unavailable.status).toBe(409);
+      const secondOrderResponse = await callApi('/api/orders', 'POST', {
+        customer: {
+          firstName: 'Map',
+          lastName: 'Pickup',
+          street: 'Second Street 2',
+          zipCode: '10115',
+          phone: '+49 151 12345678',
+        },
+        pickupTimeSlot: '13:00-14:00',
+        items: [{ type: 'can', quantity: 1 }],
+      });
+      expect(secondOrderResponse.status).toBe(201);
+      const secondOrder = secondOrderResponse.data.data;
+      expect(secondOrder.dispatch).toEqual({ notifiedDrivers: 1 });
+      const busyProfile = await callApi('/api/drivers/driverStatus', 'GET', undefined, first.token);
+      expect(busyProfile.data.data.activeOrder.id).toBe(created.id);
+      expect(busyProfile.data.data.pendingOrders.some((offer: { id: string }) => offer.id === secondOrder.id)).toBe(false);
+      const busyAccept = await callApi(
+        `/api/drivers/driverStatus/pendingOrders/${secondOrder.id}/accept`,
+        'POST',
+        undefined,
+        first.token,
+      );
+      expect(busyAccept).toEqual({
+        status: 409,
+        data: { error: 'You already have an active order' },
+      });
+
+      await activeCard.getByRole('button', { name: 'Complete pickup' }).click();
+      const completionDialog = page.getByRole('dialog', { name: 'Complete pickup?' });
+      await expect(completionDialog).toBeVisible();
+      await expect(completionDialog).toContainText('Are you sure this pickup is complete?');
+      await completionDialog.getByRole('button', { name: 'No, go back' }).click();
+      await expect(completionDialog).toBeHidden();
+      await expect(activeCard).toBeVisible();
+      expect((await callApi('/api/drivers/driverStatus', 'GET', undefined, first.token))
+        .data.data.activeOrder.id).toBe(created.id);
+
+      await activeCard.getByRole('button', { name: 'Complete pickup' }).click();
+      await expect(completionDialog).toBeVisible();
+      const completionResponsePromise = page.waitForResponse((response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === `/api/drivers/driverStatus/orders/${created.id}/complete`);
+      await completionDialog.getByRole('button', { name: 'Yes, complete' }).click();
+      const completionResponse = await completionResponsePromise;
+      expect(completionResponse.status()).toBe(200);
+      await expect(page.getByRole('status')).toContainText(`Pickup #${created.id} marked complete`);
+      await expect(activeCard).toHaveCount(0);
+      const repeatedCompletion = await callApi(
+        `/api/drivers/driverStatus/orders/${created.id}/complete`,
+        'POST',
+        undefined,
+        first.token,
+      );
+      expect(repeatedCompletion.status).toBe(409);
+      const completedProfile = await callApi('/api/drivers/driverStatus', 'GET', undefined, first.token);
+      expect(completedProfile.data.data.acceptedOrders).toEqual([
+        expect.objectContaining({ id: created.id, status: 'completed' }),
+      ]);
+
+      const thirdOrderResponse = await callApi('/api/orders', 'POST', {
+        customer: {
+          firstName: 'Map',
+          lastName: 'Pickup',
+          street: 'Third Street 3',
+          zipCode: '10115',
+          phone: '+49 151 12345678',
+        },
+        pickupTimeSlot: '14:00-15:00',
+        items: [{ type: 'pet', quantity: 1 }],
+      });
+      expect(thirdOrderResponse.status).toBe(201);
+      const thirdOrder = thirdOrderResponse.data.data;
+      expect(thirdOrder.dispatch).toEqual({ notifiedDrivers: 2 });
+      const availableAgain = await callApi(
+        `/api/drivers/driverStatus/pendingOrders/${thirdOrder.id}/accept`,
+        'POST',
+        undefined,
+        first.token,
+      );
+      expect(availableAgain).toEqual({
+        status: 200,
+        data: { data: { orderId: thirdOrder.id, status: 'accepted' } },
+      });
+      const finalProfile = await callApi('/api/drivers/driverStatus', 'GET', undefined, first.token);
+      expect(finalProfile.data.data.activeOrder.id)
+        .toBe(thirdOrder.id);
+      expect(finalProfile.data.data.acceptedOrders).toHaveLength(1);
+
+      await stopServer(child);
+      const expireOfferScript = `
+        const fs = require('node:fs');
+        const initSqlJs = require('sql.js');
+        (async () => {
+          const SQL = await initSqlJs({
+            locateFile: (fileName) => require.resolve(\`sql.js/dist/\${fileName}\`),
+          });
+          const databasePath = process.argv[1];
+          const database = new SQL.Database(fs.readFileSync(databasePath));
+          database.run(
+            "UPDATE driver_order_offers SET expires_at = ?, missed_at = NULL WHERE order_id = ? AND status = 'pending'",
+            [new Date(0).toISOString(), process.argv[2]],
+          );
+          fs.writeFileSync(databasePath, Buffer.from(database.export()));
+        })().catch((error) => {
+          console.error(error);
+          process.exitCode = 1;
+        });
+      `;
+      execFileSync(process.execPath, ['-e', expireOfferScript, databasePath, secondOrder.id], {
+        cwd: process.cwd(),
+      });
+      child = startServer();
+      await waitForServer(child);
+      const missedProfile = await callApi('/api/drivers/driverStatus', 'GET', undefined, second.token);
+      expect(missedProfile.status).toBe(200);
+      expect(missedProfile.data.data.pendingOrders).toEqual([]);
+      expect(missedProfile.data.data.missedOrders).toEqual([
+        expect.objectContaining({ id: secondOrder.id, status: 'missed', missedAt: expect.any(String) }),
+      ]);
+    } finally {
+      await stopServer(child);
+      await rm(databasePath, { force: true });
+    }
   });
 
   test('generates a distinct four-digit reference for each new order', async ({ request }) => {
@@ -661,7 +1185,8 @@ test.describe('Pulse Logistics pickup orders', () => {
       { order: { ...validOrder, customer: { ...validOrder.customer, phone: '......' } }, error: 'Phone number is invalid' },
       { order: { ...validOrder, pickupTimeSlot: '22:00-23:00' }, error: 'Pickup time slot is invalid' },
       { order: { ...validOrder, items: [{ type: 'unknown', quantity: 1 }] }, error: 'Bottle category is invalid or duplicated' },
-      { order: { ...validOrder, items: [{ type: 'pet', quantity: 0 }] }, error: 'Bottle quantity must be an integer between 1 and 1000' },
+      { order: { ...validOrder, items: [{ type: 'pet', quantity: 0 }] }, error: 'Bottle quantity must be an integer between 1 and 50' },
+      { order: { ...validOrder, items: [{ type: 'water', quantity: 51 }] }, error: 'Bottle quantity must be an integer between 1 and 50' },
     ];
 
     for (const { order, error } of cases) {
@@ -702,7 +1227,9 @@ test.describe('Pulse Logistics pickup orders', () => {
     await page.getByLabel('Street & House Number *').fill('Main Street 1');
     await page.getByLabel('ZIP Code (PLZ) *').fill('10115');
     await page.getByLabel('Mobile Phone Number *').fill('+49 151 12345678');
-    await page.getByLabel('Pickup Time Slot *').selectOption('10:00-11:00');
+    await page.getByLabel('IBAN *').fill('DE89370400440532013000');
+    await page.getByRole('combobox', { name: 'Pickup Time Slot *' }).click();
+    await page.getByRole('option', { name: '10:00–11:00' }).click();
     await page.getByRole('button', { name: 'Confirm Pickup' }).click();
 
     await expect(page.locator('#fname')).toHaveAttribute('aria-invalid', 'true');
@@ -713,6 +1240,65 @@ test.describe('Pulse Logistics pickup orders', () => {
     await page.getByRole('button', { name: 'Confirm Pickup' }).click();
     await expect(page.locator('#phone')).toHaveAttribute('aria-invalid', 'true');
     expect(orderRequestSent).toBe(false);
+  });
+
+  test('updates existing client-side validation messages immediately when language changes', async ({ page }) => {
+    let orderRequestSent = false;
+    await page.route('**/api/orders', async (route) => {
+      orderRequestSent = true;
+      await route.continue();
+    });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+    await page.getByRole('button', { name: 'Add to Order' }).click();
+    await page.getByRole('button', { name: 'Proceed to Address' }).click();
+
+    await page.getByRole('button', { name: 'Confirm Pickup' }).click();
+    const firstName = page.locator('#fname');
+    await expect(firstName).toHaveAttribute('aria-invalid', 'true');
+    await expect.poll(() => firstName.evaluate((input) => (input as HTMLInputElement).validationMessage))
+      .toBe('This field is required.');
+
+    await page.getByRole('button', { name: 'DE', exact: true }).click();
+    await expect.poll(() => firstName.evaluate((input) => (input as HTMLInputElement).validationMessage))
+      .toBe('Dieses Feld ist erforderlich.');
+    await page.getByRole('button', { name: 'Abholung Bestätigen' }).click();
+    await expect.poll(() => firstName.evaluate((input) => (input as HTMLInputElement).validationMessage))
+      .toBe('Dieses Feld ist erforderlich.');
+    expect(orderRequestSent).toBe(false);
+  });
+
+  test('validates IBAN minimum, maximum, and character format in the browser', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+    await page.getByRole('button', { name: 'Add to Order' }).click();
+    await page.getByRole('button', { name: 'Proceed to Address' }).click();
+
+    const iban = page.getByLabel('IBAN *');
+    await expect(iban).toHaveAttribute('minlength', '15');
+    await expect(iban).toHaveAttribute('maxlength', '34');
+    await expect(iban).toHaveAttribute('required', '');
+
+    await iban.fill(`DE12${'1'.repeat(10)}`);
+    await expect(iban).toHaveAttribute('aria-invalid', 'true');
+    expect(await iban.evaluate((input) => (input as HTMLInputElement).validity.customError)).toBe(true);
+
+    await iban.fill(`DE12${'1'.repeat(11)}`);
+    await expect(iban).toHaveAttribute('aria-invalid', 'false');
+    expect(await iban.evaluate((input) => (input as HTMLInputElement).validity.valid)).toBe(true);
+
+    await iban.fill(`DE12${'1'.repeat(30)}`);
+    await expect(iban).toHaveAttribute('aria-invalid', 'false');
+    await iban.evaluate((input) => {
+      const field = input as HTMLInputElement;
+      field.value = `DE12${'1'.repeat(31)}`;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(iban).toHaveAttribute('aria-invalid', 'true');
+    expect(await iban.evaluate((input) => (input as HTMLInputElement).validity.customError)).toBe(true);
+
+    await iban.fill(`DE1A${'1'.repeat(11)}`);
+    await expect(iban).toHaveAttribute('aria-invalid', 'true');
   });
 
   test('accepts international names in the browser and API', async ({ page }) => {
@@ -742,7 +1328,9 @@ test.describe('Pulse Logistics pickup orders', () => {
     await page.getByLabel('Street & House Number *').fill('Hauptstraße 12');
     await page.getByLabel('ZIP Code (PLZ) *').fill('10115');
     await page.getByLabel('Mobile Phone Number *').fill('+49 151 12345678');
-    await page.getByLabel('Pickup Time Slot *').selectOption('10:00-11:00');
+    await page.getByLabel('IBAN *').fill('DE89370400440532013000');
+    await page.getByRole('combobox', { name: 'Pickup Time Slot *' }).click();
+    await page.getByRole('option', { name: '10:00–11:00' }).click();
     await page.getByRole('button', { name: 'Confirm Pickup' }).click();
 
     await expect(page.getByRole('heading', { name: 'Order Confirmed!' })).toBeVisible();

@@ -150,30 +150,149 @@
         }
         select {
             appearance: none;
-            padding-right: 40px;
+            padding: 11px 42px 11px 13px;
+            border: 1px solid #d5dce6;
+            border-radius: 12px;
+            box-shadow: 0 1px 2px rgba(9, 30, 66, 0.04);
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23172b4d' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: right 14px center;
             background-size: 12px 8px;
+            cursor: pointer;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        select:hover { border-color: #aab6c6; }
+        select option {
+            padding: 8px 10px;
+            background: #fff;
+            color: var(--text);
+        }
+        select option:checked {
+            background: #eaf1ff;
+            color: var(--primary);
+        }
+        select option[value=""] { color: #6b778c; }
+        .select-wrap { position: relative; width: 100%; }
+        select.select-native {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            clip-path: inset(50%);
+        }
+        .select-trigger {
+            display: block;
+            width: 100%;
+            min-height: 42px;
+            padding: 11px 42px 11px 13px;
+            overflow: hidden;
+            border: 1px solid #d5dce6;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(9, 30, 66, 0.04);
+            color: var(--text);
+            font: inherit;
+            text-align: left;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .select-trigger::after {
+            position: absolute;
+            top: 50%;
+            right: 15px;
+            width: 8px;
+            height: 8px;
+            border-right: 1.5px solid currentColor;
+            border-bottom: 1.5px solid currentColor;
+            content: "";
+            pointer-events: none;
+            transform: translateY(-70%) rotate(45deg);
+            transition: transform 0.18s ease;
+        }
+        .select-trigger[aria-expanded="true"]::after {
+            transform: translateY(-20%) rotate(225deg);
+        }
+        .select-trigger:hover { border-color: #aab6c6; }
+        .select-trigger:focus-visible {
+            outline: 3px solid rgba(0, 82, 204, 0.14);
+            outline-offset: 1px;
+        }
+        .select-trigger[aria-invalid="true"] { border-color: var(--danger); }
+        .select-menu {
+            position: absolute;
+            z-index: 20;
+            top: calc(100% + 6px);
+            right: 0;
+            left: 0;
+            max-height: 220px;
+            overflow-y: auto;
+            padding: 4px;
+            border: 1px solid #d5dce6;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 10px 24px rgba(9, 30, 66, 0.16);
+        }
+        .select-menu[data-placement="above"] { top: auto; bottom: calc(100% + 6px); }
+        .select-menu[hidden] { display: none; }
+        .select-option {
+            padding: 9px 10px;
+            border-radius: 8px;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .select-option:hover, .select-option.is-active { background: #f2f5fa; }
+        .select-option[aria-selected="true"] {
+            background: #eaf1ff;
+            color: var(--primary);
+            font-weight: 600;
         }
         select:focus, input:focus {
             outline: none;
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(0,82,204,0.15);
         }
+        select:focus-visible, input:focus-visible {
+            outline: 3px solid rgba(0, 82, 204, 0.14);
+            outline-offset: 1px;
+        }
 
         .quantity-control-wrapper { display: flex; gap: 8px; align-items: stretch; margin-bottom: 16px; }
         .qty-box { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 6px; width: 130px; min-width: 130px; background: var(--light-bg); }
-        .qty-btn { border: none; background: transparent; padding: 10px 14px; font-size: 1.2rem; font-weight: 700; color: var(--primary); cursor: pointer; flex: 1; }
-        .qty-val { width: 45px; text-align: center; border: none; font-weight: 700; font-size: 1rem; background: transparent; }
+        .qty-btn {
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            padding: 10px 14px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--primary);
+            cursor: pointer;
+            flex: 1;
+            transition: background-color 0.16s ease, color 0.16s ease;
+        }
+        .qty-btn:hover { background: #e7edfa; }
+        .qty-btn:active { background: #d7e2f8; }
+        .qty-btn.qty-animating { animation: qty-button-feedback 260ms ease-out; }
+        @keyframes qty-button-feedback {
+            35% { transform: scale(0.82) rotate(var(--qty-rotation)); }
+            70% { transform: scale(1.12) rotate(0); }
+            100% { transform: scale(1) rotate(0); }
+        }
+        .qty-val { width: 45px; padding: 0; text-align: center; border: none; font-weight: 700; font-size: 1rem; background: transparent; }
 
         .add-btn { flex: 1; min-width: 0; background: var(--primary); color: var(--white); border: none; padding: 12px; border-radius: 6px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
         .add-btn:hover { background: var(--primary-hover); }
 
         /* Cart Items Display */
-        .cart-list { max-height: 180px; overflow-y: auto; margin-bottom: 16px; border-top: 1px solid var(--border); }
+        .cart-list { max-height: 180px; overflow-x: hidden; overflow-y: auto; margin-bottom: 16px; border-top: 1px solid var(--border); }
         .item-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f4f5f7; font-size: 0.9rem; }
-        .item-info { display: flex; flex-direction: column; }
+        .item-info { display: flex; min-width: 0; flex-direction: column; }
         .item-title { font-weight: 600; }
         .item-sub { font-size: 0.75rem; color: #6b778c; }
         .del-btn { color: var(--danger); background: none; border: none; padding: 4px 8px; cursor: pointer; font-size: 1.1rem; }
@@ -191,6 +310,32 @@
 
         .ui-note { background: var(--note-bg); color: var(--danger); padding: 10px; border-radius: 6px; font-size: 0.8rem; line-height: 1.4; margin-top: 6px; text-transform: uppercase; font-weight: 700; }
         .validation-message { color: var(--danger); font-size: 0.85rem; font-weight: 600; margin: 10px 0 0; }
+
+        .step-enter { animation: step-enter 280ms ease-out both; }
+        .item-row { animation: cart-item-enter 220ms ease-out both; }
+        .item-row.is-removing { animation: cart-item-remove 180ms ease-in both; pointer-events: none; }
+        .del-btn { border-radius: 6px; transition: background-color 0.16s ease; }
+        .del-btn:hover { background: #ffebe6; }
+        .is-animating { animation: button-feedback 240ms ease-out; }
+        @keyframes step-enter {
+            from { opacity: 0; translate: 0 10px; }
+            to { opacity: 1; translate: 0 0; }
+        }
+        @keyframes cart-item-enter {
+            from { opacity: 0; translate: -8px 0; }
+            to { opacity: 1; translate: 0 0; }
+        }
+        @keyframes cart-item-remove {
+            to { opacity: 0; transform: translateX(12px) scale(0.98); }
+        }
+        @keyframes button-feedback {
+            50% { transform: scale(0.97); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .step-enter, .item-row, .item-row.is-removing, .is-animating, .qty-btn.qty-animating {
+                animation-duration: 0.01ms;
+            }
+        }
 
         .hidden { display: none !important; }
 
@@ -237,7 +382,7 @@
             .quantity-control-wrapper { gap: 6px; }
             .qty-box { flex: 0 0 96px; width: 96px; }
             .qty-btn { padding: 10px 8px; }
-            .qty-val { width: 32px; }
+            .qty-val { width: 40px; }
             .add-btn { min-width: 0; padding: 12px 8px; }
             .total-box { padding: 12px; }
         }
@@ -297,18 +442,18 @@
         <div class="form-group">
             <label id="t-label-type">Select Bottle Category</label>
             <select id="bottleType">
-                <option value="0.25" data-key="pet">PET Plastic Bottle (€0.25)</option>
-                <option value="0.08" data-key="beer">Glass Beer Bottle (€0.08)</option>
-                <option value="0.15" data-key="water">Glass Water/Juice Bottle (€0.15)</option>
-                <option value="0.25" data-key="can">Aluminum Can (€0.25)</option>
+                <option value="pet" data-key="pet">PET Plastic Bottle (€0.25)</option>
+                <option value="beer" data-key="beer">Glass Beer Bottle (€0.08)</option>
+                <option value="water" data-key="water">Glass Water/Juice Bottle (€0.15)</option>
+                <option value="can" data-key="can">Aluminum Can (€0.25)</option>
             </select>
         </div>
 
         <div class="quantity-control-wrapper">
             <div class="qty-box">
-                <button class="qty-btn" onclick="adjustQty(-1)">-</button>
+                <button class="qty-btn" onclick="adjustQty(-1, this)" aria-label="Decrease quantity">-</button>
                 <input type="text" id="qty" class="qty-val" value="1" readonly>
-                <button class="qty-btn" onclick="adjustQty(1)">+</button>
+                <button class="qty-btn" onclick="adjustQty(1, this)" aria-label="Increase quantity">+</button>
             </div>
             <button class="add-btn" id="t-btn-add" onclick="addItem()">Add to Order</button>
         </div>
@@ -327,7 +472,7 @@
     <!-- STEP 2: ADDRESS FORM -->
     <div class="card hidden" id="step2">
         <h2 id="t-step2-title">2. Delivery & Address</h2>
-        <form id="addressForm" onsubmit="submitOrder(event)">
+        <form id="addressForm" autocomplete="off" novalidate onsubmit="submitOrder(event)">
             <div class="form-group">
                 <label id="t-lbl-fname" for="fname">First Name *</label>
                 <input type="text" id="fname" required minlength="1" maxlength="100" autocomplete="given-name" placeholder="e.g. Max">
@@ -352,9 +497,14 @@
                 </div>
             </div>
             <div class="form-group">
+                <label id="t-lbl-iban" for="iban">IBAN *</label>
+                <input type="text" id="iban" required minlength="15" maxlength="34" autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="[A-Za-z]{2}[0-9]{2}[A-Za-z0-9]{11,30}" title="Enter 15–34 characters: two letters, two digits, then letters or digits; no spaces" aria-describedby="t-iban-note" placeholder="DE89370400440532013000">
+                <div class="ui-note" id="t-iban-note">Enter 15–34 letters and digits without spaces.</div>
+            </div>
+            <div class="form-group">
                 <label id="t-lbl-time-slot" for="timeSlot">Pickup Time Slot *</label>
-                <select id="timeSlot" required>
-                    <option value="" data-key="slotPlaceholder">Select a pickup time</option>
+                <select id="timeSlot" required autocomplete="off">
+                    <option value="" data-key="slotPlaceholder" selected>Select a pickup time</option>
                     <option value="10:00-11:00">10:00–11:00</option>
                     <option value="11:00-12:00">11:00–12:00</option>
                     <option value="12:00-13:00">12:00–13:00</option>
@@ -382,7 +532,8 @@
             <span id="t-step3-msg-intro">Thank you. Your doorstep Pfand pickup request has been scheduled.</span><br><br>
             <span id="t-step3-msg-courier">A cargo bike courier will arrive during your selected window.</span><br id="t-step3-msg-pickup-break" class="hidden"><br id="t-step3-msg-pickup-extra-break" class="hidden">
             <span id="t-step3-msg-pickup" class="hidden"></span><strong id="t-step3-msg-pickup-value"></strong><br id="t-step3-msg-order-break" class="hidden"><br id="t-step3-msg-order-extra-break" class="hidden">
-            <span id="t-step3-msg-order" class="hidden"></span><strong id="t-step3-msg-order-value"></strong>
+            <span id="t-step3-msg-order" class="hidden"></span><strong id="t-step3-msg-order-value"></strong><br id="t-step3-msg-payment-break" class="hidden"><br id="t-step3-msg-payment-extra-break" class="hidden">
+            <span id="t-step3-msg-payment" class="hidden"></span>
         </p>
         <button class="btn" id="t-btn-reset" onclick="resetApp()">Schedule Another Pickup</button>
     </div>
@@ -410,6 +561,9 @@
             lblZip: "ZIP Code (PLZ) *",
             lblPhone: "Mobile Phone Number *",
             phoneNote: "<strong>Note:</strong> Your phone number is only required so our courier can contact you if they encounter difficulty finding your entrance or door.",
+            lblIban: "IBAN *",
+            ibanNote: "Enter 15–34 letters and digits without spaces.",
+            ibanInvalid: "Enter 15–34 characters: two letters, two digits, then letters or digits; no spaces.",
             lblTimeSlot: "Pickup Time Slot *",
             slotPlaceholder: "Select a pickup time",
             pickupTime: "Selected pickup time",
@@ -418,11 +572,19 @@
             btnSaving: "Saving pickup...",
             orderFailed: "We couldn't save your pickup. Please try again.",
             orderNumber: "Order reference",
+            paymentWithin24Hours: [
+                { text: "The payment will be sent to the " },
+                { text: "IBAN", bold: true },
+                { text: " you provided within " },
+                { text: "24 hours", bold: true },
+                { text: "." }
+            ],
             fieldRequired: "This field is required.",
             nameInvalid: "Use letters, spaces, apostrophes, or hyphens only.",
             streetInvalid: "Enter a valid street address without control characters.",
+            zipInvalid: "Enter a five-digit ZIP code.",
             phoneInvalid: "Enter at least six digits and use only common phone symbols.",
-            quantityLimit: "A maximum of 1,000 bottles per category can be ordered.",
+            quantityLimit: "A maximum of 50 bottles per category can be ordered.",
             removeItem: "Remove item",
             step3MsgIntro: "Thank you. Your doorstep Pfand pickup request has been scheduled.",
             step3MsgCourier: "A cargo bike courier will arrive during your selected window.",
@@ -446,6 +608,9 @@
             lblZip: "Postleitzahl (PLZ) *",
             lblPhone: "Mobilnummer *",
             phoneNote: "<strong>Hinweis:</strong> Ihre Telefonnummer wird nur genutzt, falls der Kurier Schwierigkeiten hat, Ihre Adresse oder Ihren Eingang zu finden.",
+            lblIban: "IBAN *",
+            ibanNote: "Geben Sie 15–34 Buchstaben und Ziffern ohne Leerzeichen ein.",
+            ibanInvalid: "Geben Sie 15–34 Zeichen ein: zwei Buchstaben, zwei Ziffern, danach Buchstaben oder Ziffern; keine Leerzeichen.",
             lblTimeSlot: "Abholzeit *",
             slotPlaceholder: "Bitte Abholzeit auswählen",
             pickupTime: "Ausgewählte Abholzeit",
@@ -454,11 +619,19 @@
             btnSaving: "Abholung wird gespeichert...",
             orderFailed: "Die Abholung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
             orderNumber: "Auftragsnummer",
+            paymentWithin24Hours: [
+                { text: "Die Zahlung wird innerhalb von " },
+                { text: "24 Stunden", bold: true },
+                { text: " auf die von Ihnen angegebene " },
+                { text: "IBAN", bold: true },
+                { text: " überwiesen." }
+            ],
             fieldRequired: "Dieses Feld ist erforderlich.",
             nameInvalid: "Verwenden Sie nur Buchstaben, Leerzeichen, Apostrophe oder Bindestriche.",
             streetInvalid: "Geben Sie eine gültige Adresse ohne Steuerzeichen ein.",
+            zipInvalid: "Geben Sie eine fünfstellige Postleitzahl ein.",
             phoneInvalid: "Geben Sie mindestens sechs Ziffern und nur übliche Telefonsymbole ein.",
-            quantityLimit: "Pro Kategorie können höchstens 1.000 Flaschen bestellt werden.",
+            quantityLimit: "Pro Kategorie können höchstens 50 Flaschen bestellt werden.",
             removeItem: "Artikel entfernen",
             step3MsgIntro: "Vielen Dank. Ihre Pfandabholung wurde erfolgreich gebucht.",
             step3MsgCourier: "Ein Lastenrad-Kurier wird zum gewählten Zeitpunkt bei Ihnen sein.",
@@ -470,14 +643,17 @@
         }
     };
 
-    let currentLang = 'de';
+    let currentLang = sessionStorage.getItem('appLang') === 'en' ? 'en' : 'de';
+    let validationAttempted = false;
     const bottleRates = { pet: 0.25, beer: 0.08, water: 0.15, can: 0.25 };
+    const maxBottlesPerCategory = 50;
     const namePattern = /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u;
     let cart = loadCart();
     let selectedPickupTime = '';
     let orderId = '';
     let orderSubmissionKey = crypto.randomUUID();
     let currentStep = 1;
+    const customSelectRefreshers = new Map();
     const initialStep = history.state?.pulseStep === 2 ? 2 : 1;
 
     history.replaceState({ ...history.state, pulseStep: initialStep }, '');
@@ -488,15 +664,143 @@
             if (!Array.isArray(storedCart)) return [];
             return storedCart
                 .filter(item => item && Object.hasOwn(bottleRates, item.key) &&
-                    Number.isInteger(item.qty) && item.qty > 0 && item.qty <= 1000)
-                .map(item => ({ id: crypto.randomUUID(), key: item.key, rate: bottleRates[item.key], qty: item.qty }));
+                    Number.isInteger(item.qty) && item.qty > 0)
+                .map(item => ({
+                    id: crypto.randomUUID(),
+                    key: item.key,
+                    rate: bottleRates[item.key],
+                    qty: Math.min(item.qty, maxBottlesPerCategory),
+                }));
         } catch {
             return [];
         }
     }
 
     setLanguage(currentLang);
+    ['bottleType', 'timeSlot'].forEach(id => {
+        const select = document.getElementById(id);
+        customSelectRefreshers.set(id, enhanceSelect(select));
+    });
     if (initialStep === 2) goToStep(2);
+
+    function enhanceSelect(select) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'select-wrap';
+        select.parentNode.insertBefore(wrapper, select);
+        wrapper.append(select);
+        select.classList.add('select-native');
+        select.setAttribute('aria-hidden', 'true');
+        select.tabIndex = -1;
+
+        const trigger = document.createElement('button');
+        trigger.id = `${select.id}-control`;
+        trigger.type = 'button';
+        trigger.className = 'select-trigger';
+        trigger.setAttribute('role', 'combobox');
+        trigger.setAttribute('aria-haspopup', 'listbox');
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.setAttribute('aria-controls', `${select.id}-options`);
+        trigger.setAttribute('aria-required', String(select.required));
+
+        const menu = document.createElement('div');
+        menu.id = `${select.id}-options`;
+        menu.className = 'select-menu';
+        menu.setAttribute('role', 'listbox');
+        menu.setAttribute('aria-labelledby', trigger.id);
+        menu.hidden = true;
+        wrapper.append(trigger, menu);
+
+        const label = select.closest('.form-group').querySelector('label');
+        label.htmlFor = trigger.id;
+
+        let activeIndex = Math.max(0, select.selectedIndex);
+        function refreshOptions() {
+            menu.replaceChildren();
+            Array.from(select.options).forEach((option, index) => {
+                const item = document.createElement('div');
+                item.id = `${select.id}-option-${index}`;
+                item.className = 'select-option';
+                item.setAttribute('role', 'option');
+                item.setAttribute('aria-selected', String(index === select.selectedIndex));
+                item.dataset.value = option.value;
+                item.textContent = option.text;
+                menu.append(item);
+            });
+            trigger.textContent = select.selectedOptions[0]?.text || '';
+            activeIndex = Math.max(0, select.selectedIndex);
+        }
+
+        function closeMenu() {
+            menu.hidden = true;
+            trigger.setAttribute('aria-expanded', 'false');
+            trigger.removeAttribute('aria-activedescendant');
+        }
+
+        function setActive(index) {
+            const options = Array.from(menu.children);
+            activeIndex = (index + options.length) % options.length;
+            options.forEach((option, optionIndex) => {
+                option.classList.toggle('is-active', optionIndex === activeIndex);
+            });
+            trigger.setAttribute('aria-activedescendant', options[activeIndex].id);
+            options[activeIndex].scrollIntoView({ block: 'nearest' });
+        }
+
+        function openMenu() {
+            menu.hidden = false;
+            trigger.setAttribute('aria-expanded', 'true');
+            const rect = trigger.getBoundingClientRect();
+            const estimatedHeight = Math.min(220, menu.children.length * 38 + 8);
+            const roomBelow = window.innerHeight - rect.bottom;
+            const roomAbove = rect.top;
+            menu.dataset.placement = roomBelow < estimatedHeight && roomAbove > roomBelow ? 'above' : 'below';
+            setActive(activeIndex);
+        }
+
+        function chooseOption(option) {
+            select.value = option.dataset.value;
+            trigger.removeAttribute('aria-invalid');
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            closeMenu();
+            trigger.focus();
+        }
+
+        trigger.addEventListener('click', () => {
+            if (menu.hidden) openMenu();
+            else closeMenu();
+        });
+        trigger.addEventListener('keydown', event => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (menu.hidden) openMenu();
+                setActive(activeIndex + (event.key === 'ArrowDown' ? 1 : -1));
+            } else if (event.key === 'Home' || event.key === 'End') {
+                event.preventDefault();
+                if (menu.hidden) openMenu();
+                setActive(event.key === 'Home' ? 0 : menu.children.length - 1);
+            } else if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                if (menu.hidden) openMenu();
+                else chooseOption(menu.children[activeIndex]);
+            } else if (event.key === 'Escape' && !menu.hidden) {
+                event.preventDefault();
+                closeMenu();
+            } else if (event.key === 'Tab') {
+                closeMenu();
+            }
+        });
+        menu.addEventListener('click', event => {
+            const option = event.target.closest('.select-option');
+            if (option) chooseOption(option);
+        });
+        select.addEventListener('change', refreshOptions);
+        document.addEventListener('pointerdown', event => {
+            if (!wrapper.contains(event.target)) closeMenu();
+        });
+
+        refreshOptions();
+        return refreshOptions;
+    }
 
     function setLanguage(lang) {
         currentLang = lang;
@@ -519,6 +823,10 @@
         document.getElementById('t-lbl-zip').innerText = t.lblZip;
         document.getElementById('t-lbl-phone').innerText = t.lblPhone;
         document.getElementById('t-phone-note').innerHTML = t.phoneNote;
+        document.getElementById('t-lbl-iban').innerText = t.lblIban;
+        document.getElementById('t-iban-note').innerText = t.ibanNote;
+        document.getElementById('iban').title = t.ibanInvalid;
+        document.getElementById('zip').title = t.zipInvalid;
         document.getElementById('t-lbl-time-slot').innerText = t.lblTimeSlot;
         document.getElementById('t-btn-back').innerText = t.btnBack;
         document.getElementById('t-btn-submit').innerText = t.btnSubmit;
@@ -532,8 +840,10 @@
 
         const timeSlotPlaceholder = document.querySelector('#timeSlot option[data-key="slotPlaceholder"]');
         timeSlotPlaceholder.text = t.slotPlaceholder;
+        customSelectRefreshers.forEach(refresh => refresh());
 
         renderCart();
+        refreshValidationMessages();
     }
 
     function renderConfirmationMessage() {
@@ -549,6 +859,9 @@
         const pickupExtraBreak = document.getElementById('t-step3-msg-pickup-extra-break');
         const orderBreak = document.getElementById('t-step3-msg-order-break');
         const orderExtraBreak = document.getElementById('t-step3-msg-order-extra-break');
+        const paymentLine = document.getElementById('t-step3-msg-payment');
+        const paymentBreak = document.getElementById('t-step3-msg-payment-break');
+        const paymentExtraBreak = document.getElementById('t-step3-msg-payment-extra-break');
         pickupLine.classList.toggle('hidden', !selectedPickupTime);
         pickupValue.classList.toggle('hidden', !selectedPickupTime);
         pickupBreak.classList.toggle('hidden', !selectedPickupTime);
@@ -557,16 +870,31 @@
         orderValue.classList.toggle('hidden', !orderId);
         orderBreak.classList.toggle('hidden', !orderId);
         orderExtraBreak.classList.toggle('hidden', !orderId);
+        paymentLine.classList.toggle('hidden', !orderId);
+        paymentBreak.classList.toggle('hidden', !orderId);
+        paymentExtraBreak.classList.toggle('hidden', !orderId);
         pickupLine.innerText = selectedPickupTime ? `${t.pickupTime}: ` : '';
         pickupValue.innerText = selectedPickupTime ? `${selectedPickupTime.replace('-', '–')}.` : '';
         orderLine.innerText = orderId ? `${t.orderNumber}: ` : '';
         orderValue.innerText = orderId ? `${orderId}.` : '';
+        paymentLine.replaceChildren(...t.paymentWithin24Hours.map((part) => {
+            if (!part.bold) return document.createTextNode(part.text);
+            const emphasis = document.createElement('strong');
+            emphasis.textContent = part.text;
+            return emphasis;
+        }));
     }
 
-    function adjustQty(amount) {
+    function adjustQty(amount, button) {
+        button.style.setProperty('--qty-rotation', `${amount * 12}deg`);
+        button.classList.remove('qty-animating');
+        void button.offsetWidth;
+        button.classList.add('qty-animating');
+        button.addEventListener('animationend', () => button.classList.remove('qty-animating'), { once: true });
+
         let qtyInput = document.getElementById('qty');
         let current = parseInt(qtyInput.value) + amount;
-        if (current > 0) qtyInput.value = current;
+        if (current > 0 && current <= maxBottlesPerCategory) qtyInput.value = current;
     }
 
     function mergeCartItem(items, newItem) {
@@ -591,6 +919,7 @@
     }
 
     function addItem() {
+        animateButton(document.getElementById('t-btn-add'));
         let select = document.getElementById('bottleType');
         let key = select.options[select.selectedIndex].getAttribute('data-key');
         let rate = bottleRates[key];
@@ -598,7 +927,7 @@
         const existingQuantity = cart
             .filter(item => item.key === key)
             .reduce((total, item) => total + item.qty, 0);
-        if (existingQuantity + qty > 1000) {
+        if (existingQuantity + qty > maxBottlesPerCategory) {
             document.getElementById('t-cart-validation').innerText = translations[currentLang].quantityLimit;
             document.getElementById('t-cart-validation').classList.remove('hidden');
             return;
@@ -611,8 +940,16 @@
     }
 
     function deleteItem(id) {
-        cart = cart.filter(item => item.id !== id);
-        saveAndRender();
+        const row = Array.from(document.querySelectorAll('.item-row'))
+            .find(itemRow => itemRow.dataset.itemId === String(id));
+        if (!row || row.classList.contains('is-removing')) return;
+
+        row.classList.add('is-removing');
+        row.querySelector('.del-btn').disabled = true;
+        window.setTimeout(() => {
+            cart = cart.filter(item => item.id !== id);
+            saveAndRender();
+        }, 180);
     }
 
     function saveAndRender() {
@@ -631,6 +968,7 @@
             total += itemTotal;
             const row = document.createElement('div');
             row.className = 'item-row';
+            row.dataset.itemId = item.id;
             const info = document.createElement('div');
             info.className = 'item-info';
             const title = document.createElement('span');
@@ -676,11 +1014,63 @@
     function validatePhoneField(input) {
         const value = input.value.trim();
         const digits = value.replace(/\D/g, '');
-        const message = value && (!/^[+0-9(). -]{6,32}$/.test(value) || digits.length < 6)
-            ? translations[currentLang].phoneInvalid
+        const message = !value
+            ? translations[currentLang].fieldRequired
+            : (!/^[+0-9(). -]{6,32}$/.test(value) || digits.length < 6)
+                ? translations[currentLang].phoneInvalid
+                : '';
+        input.setCustomValidity(message);
+        input.setAttribute('aria-invalid', String(Boolean(message)));
+    }
+
+    function validateZipField(input) {
+        const value = input.value.trim();
+        const message = !value
+            ? translations[currentLang].fieldRequired
+            : !/^[0-9]{5}$/.test(value)
+                ? translations[currentLang].zipInvalid
+                : '';
+        input.setCustomValidity(message);
+        input.setAttribute('aria-invalid', String(Boolean(message)));
+    }
+
+    function validateIbanField(input) {
+        const value = input.value.trim();
+        const message = !value
+            ? translations[currentLang].fieldRequired
+            : (
+            value.length < 15 ||
+            value.length > 34 ||
+            !/^[A-Za-z]{2}[0-9]{2}[A-Za-z0-9]{11,30}$/.test(value)
+        )
+            ? translations[currentLang].ibanInvalid
             : '';
         input.setCustomValidity(message);
         input.setAttribute('aria-invalid', String(Boolean(message)));
+    }
+
+    function validateAddressFields() {
+        ['fname', 'lname', 'street'].forEach(id => validateTextField(document.getElementById(id)));
+        validateZipField(document.getElementById('zip'));
+        validatePhoneField(document.getElementById('phone'));
+        validateIbanField(document.getElementById('iban'));
+    }
+
+    function refreshValidationMessages() {
+        const validators = [
+            ['fname', validateTextField],
+            ['lname', validateTextField],
+            ['street', validateTextField],
+            ['zip', validateZipField],
+            ['phone', validatePhoneField],
+            ['iban', validateIbanField],
+        ];
+        validators.forEach(([id, validate]) => {
+            const input = document.getElementById(id);
+            if (validationAttempted || input.getAttribute('aria-invalid') === 'true' || input.validity.customError) {
+                validate(input);
+            }
+        });
     }
 
     ['fname', 'lname', 'street'].forEach(id => {
@@ -691,8 +1081,16 @@
     const phoneInput = document.getElementById('phone');
     phoneInput.addEventListener('input', () => validatePhoneField(phoneInput));
     phoneInput.addEventListener('blur', () => validatePhoneField(phoneInput));
+    const zipInput = document.getElementById('zip');
+    zipInput.addEventListener('input', () => validateZipField(zipInput));
+    zipInput.addEventListener('blur', () => validateZipField(zipInput));
+    const ibanInput = document.getElementById('iban');
+    ibanInput.addEventListener('input', () => validateIbanField(ibanInput));
+    ibanInput.addEventListener('blur', () => validateIbanField(ibanInput));
 
     function goToStep(step) {
+        if (step === 2) animateButton(document.getElementById('t-btn-proceed'));
+        if (step === 1 && currentStep === 2) animateButton(document.getElementById('t-btn-back'));
         if (step === 2 && cart.length === 0) {
             document.getElementById('t-cart-validation').classList.remove('hidden');
             return;
@@ -706,10 +1104,23 @@
         }
 
         document.getElementById('t-cart-validation').classList.add('hidden');
+        showStep(step);
+    }
+
+    function showStep(step) {
+        const selectedStep = document.getElementById('step' + step);
         document.getElementById('step1').classList.add('hidden');
         document.getElementById('step2').classList.add('hidden');
         document.getElementById('step3').classList.add('hidden');
-        document.getElementById('step' + step).classList.remove('hidden');
+        selectedStep.classList.remove('hidden', 'step-enter');
+        void selectedStep.offsetWidth;
+        selectedStep.classList.add('step-enter');
+        const clearStepAnimation = event => {
+            if (event.target !== selectedStep) return;
+            selectedStep.classList.remove('step-enter');
+            selectedStep.removeEventListener('animationend', clearStepAnimation);
+        };
+        selectedStep.addEventListener('animationend', clearStepAnimation);
         currentStep = step;
     }
 
@@ -722,26 +1133,37 @@
 
         const step = event.state?.pulseStep === 2 ? 2 : 1;
         document.getElementById('t-cart-validation').classList.add('hidden');
-        document.getElementById('step1').classList.toggle('hidden', step !== 1);
-        document.getElementById('step2').classList.toggle('hidden', step !== 2);
-        document.getElementById('step3').classList.add('hidden');
-        currentStep = step;
+        showStep(step);
     });
 
     async function submitOrder(e) {
         e.preventDefault();
-        selectedPickupTime = document.getElementById('timeSlot').value;
         const submitButton = document.getElementById('t-btn-submit');
+        animateButton(submitButton);
         const errorMessage = document.getElementById('order-error');
         const t = translations[currentLang];
+        validationAttempted = true;
         errorMessage.classList.add('hidden');
         submitButton.disabled = true;
         submitButton.innerText = t.btnSaving;
 
         try {
             const form = document.getElementById('addressForm');
-            ['fname', 'lname', 'street'].forEach(id => validateTextField(document.getElementById(id)));
-            if (!form.reportValidity()) return;
+            validateAddressFields();
+            const timeSlotSelect = document.getElementById('timeSlot');
+            const timeSlotWasRequired = timeSlotSelect.required;
+            timeSlotSelect.required = false;
+            const addressIsValid = form.reportValidity();
+            timeSlotSelect.required = timeSlotWasRequired;
+            if (!addressIsValid) return;
+            selectedPickupTime = timeSlotSelect.value;
+            if (!selectedPickupTime) {
+                const timeSlotControl = document.getElementById('timeSlot-control');
+                timeSlotControl.setAttribute('aria-invalid', 'true');
+                timeSlotControl.focus();
+                timeSlotControl.click();
+                return;
+            }
             const response = await fetch('/api/orders', {
                 method: 'POST',
                 headers: {
@@ -780,8 +1202,16 @@
 
     function resetApp() {
         document.getElementById('addressForm').reset();
+        validationAttempted = false;
+        ['fname', 'lname', 'street', 'zip', 'phone', 'iban'].forEach(id => {
+            const input = document.getElementById(id);
+            input.setCustomValidity('');
+            input.setAttribute('aria-invalid', 'false');
+        });
         document.getElementById('order-error').classList.add('hidden');
         document.getElementById('bottleType').selectedIndex = 0;
+        document.getElementById('timeSlot').selectedIndex = 0;
+        customSelectRefreshers.forEach(refresh => refresh());
         document.getElementById('qty').value = 1;
         selectedPickupTime = '';
         orderId = '';
@@ -792,6 +1222,13 @@
         history.replaceState({ ...history.state, pulseStep: 1 }, '');
         renderCart();
         goToStep(1);
+    }
+
+    function animateButton(button) {
+        button.classList.remove('is-animating');
+        void button.offsetWidth;
+        button.classList.add('is-animating');
+        button.addEventListener('animationend', () => button.classList.remove('is-animating'), { once: true });
     }
 </script>
 </body>
