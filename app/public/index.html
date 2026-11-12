@@ -876,7 +876,7 @@
         pickupLine.innerText = selectedPickupTime ? `${t.pickupTime}: ` : '';
         pickupValue.innerText = selectedPickupTime ? `${selectedPickupTime.replace('-', '–')}.` : '';
         orderLine.innerText = orderId ? `${t.orderNumber}: ` : '';
-        orderValue.innerText = orderId ? `${orderId}.` : '';
+        orderValue.innerText = orderId ? `#${orderId}.` : '';
         paymentLine.replaceChildren(...t.paymentWithin24Hours.map((part) => {
             if (!part.bold) return document.createTextNode(part.text);
             const emphasis = document.createElement('strong');
@@ -1176,7 +1176,8 @@
                         lastName: document.getElementById('lname').value,
                         street: document.getElementById('street').value,
                         zipCode: document.getElementById('zip').value,
-                        phone: document.getElementById('phone').value
+                        phone: document.getElementById('phone').value,
+                        iban: document.getElementById('iban').value
                     },
                     pickupTimeSlot: selectedPickupTime,
                     items: cart.map(item => ({ type: item.key, quantity: item.qty }))

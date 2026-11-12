@@ -185,7 +185,7 @@
       summary.append(
         element('h2', 'customer', order.customerName),
         element('p', 'order-date', new Date(`${order.createdAt.replace(' ', 'T')}Z`).toLocaleString(language === 'de' ? 'de-DE' : 'en-GB')),
-        element('p', 'order-id', `${t.reference}: ${order.id}`)
+        element('p', 'order-id', `${t.reference}: #${order.id}`)
       );
       top.append(summary, element('strong', 'order-total', `€${order.totalRefund}`));
       const meta = element('div', 'order-meta');

@@ -15,6 +15,7 @@ const pickupSlots = new Set([
 ]);
 const offerWindowSeconds = 60;
 const offerWindowMs = offerWindowSeconds * 1000;
+const driverCredentials = { username: 'James', password: 'genius' };
 
 class ApiError extends Error {
   constructor(status, message) {
@@ -54,15 +55,25 @@ class LocalSqlitePool {
     if (!orderColumns.some((column) => column[1] === 'completed_at')) {
       database.run('ALTER TABLE pickup_orders ADD COLUMN completed_at TEXT');
     }
+    if (!orderColumns.some((column) => column[1] === 'iban')) {
+      database.run('ALTER TABLE pickup_orders ADD COLUMN iban TEXT');
+    }
     const offerColumns = database.exec('PRAGMA table_info(driver_order_offers)')[0].values;
     if (!offerColumns.some((column) => column[1] === 'missed_at')) {
       database.run('ALTER TABLE driver_order_offers ADD COLUMN missed_at TEXT');
+    }
+    const driverColumns = database.exec('PRAGMA table_info(drivers)')[0].values;
+    if (!driverColumns.some((column) => column[1] === 'username')) {
+      database.run('ALTER TABLE drivers ADD COLUMN username TEXT');
     }
     database.run(
       'CREATE INDEX IF NOT EXISTS pickup_orders_active_driver ON pickup_orders(assigned_driver_id, completed_at)',
     );
     database.run(
       'CREATE UNIQUE INDEX IF NOT EXISTS pickup_orders_idempotency_key ON pickup_orders(idempotency_key) WHERE idempotency_key IS NOT NULL',
+    );
+    database.run(
+      'CREATE UNIQUE INDEX IF NOT EXISTS drivers_username_unique ON drivers(username) WHERE username IS NOT NULL',
     );
     database.run('UPDATE drivers SET online = 0');
     this.database = database;
@@ -203,6 +214,10 @@ function validateOrder(body) {
   if (!/^[+0-9(). -]{6,32}$/.test(phone) || phone.replace(/\D/g, '').length < 6) {
     throw new ApiError(400, 'Phone number is invalid');
   }
+  const iban = requiredText(customer && customer.iban, 'IBAN', 34);
+  if (!/^[A-Za-z]{2}[0-9]{2}[A-Za-z0-9]{11,30}$/.test(iban)) {
+    throw new ApiError(400, 'IBAN is invalid');
+  }
   const order = {
     customer: {
       firstName: name(customer && customer.firstName, 'First name'),
@@ -210,6 +225,7 @@ function validateOrder(body) {
       street,
       zipCode: requiredText(customer && customer.zipCode, 'ZIP code', 5),
       phone,
+      iban: iban.toUpperCase(),
     },
     pickupTimeSlot: body && body.pickupTimeSlot,
     items: body && body.items,
@@ -284,8 +300,8 @@ async function createOrder(request, response) {
 
         await client.query(
           `INSERT INTO pickup_orders
-            (id, first_name, last_name, street, zip_code, phone, pickup_time_slot, total_refund, idempotency_key, request_hash)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            (id, first_name, last_name, street, zip_code, phone, iban, pickup_time_slot, total_refund, idempotency_key, request_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
           [
             id,
             order.customer.firstName,
@@ -293,6 +309,7 @@ async function createOrder(request, response) {
             order.customer.street,
             order.customer.zipCode,
             order.customer.phone,
+            order.customer.iban,
             order.pickupTimeSlot,
             totalRefund,
             idempotencyKey,
@@ -366,14 +383,14 @@ async function authenticateDriver(request) {
   if (!token) throw new ApiError(401, 'Driver authentication is required');
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   const result = await database.query(
-    'SELECT id, name, vehicle_type, online FROM drivers WHERE token_hash = $1',
+    'SELECT id, name, vehicle_type, online FROM drivers WHERE token_hash = $1 AND username IS NOT NULL',
     [tokenHash],
   );
   if (!result.rowCount) throw new ApiError(401, 'Driver token is invalid');
   return result.rows[0];
 }
 
-async function registerDriver(request, response) {
+async function loginDriver(request, response) {
   let body;
   try {
     body = await readJsonBody(request);
@@ -381,27 +398,101 @@ async function registerDriver(request, response) {
     if (error instanceof ApiError) return sendJson(response, error.status, { error: error.message });
     throw error;
   }
-  const name = body && typeof body.name === 'string' ? body.name.trim() : '';
-  const namePattern = /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u;
-  const vehicleType = body && body.vehicleType;
-  if (!name || name.length > 100 || !namePattern.test(name.normalize('NFC'))) {
-    return sendJson(response, 400, { error: 'Driver name must contain 1–100 letters, spaces, apostrophes, or hyphens' });
+  if (!body || body.username !== driverCredentials.username || body.password !== driverCredentials.password) {
+    return sendJson(response, 401, { error: 'Invalid username or password' });
   }
-  if (!['cargo-bike', 'bike', 'car'].includes(vehicleType)) {
-    return sendJson(response, 400, { error: 'Vehicle type must be cargo-bike, bike, or car' });
-  }
-
   const token = crypto.randomUUID();
-  const driver = { id: crypto.randomUUID(), name: name.normalize('NFC'), vehicleType };
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  let client;
   try {
-    await database.query(
-      'INSERT INTO drivers (id, name, vehicle_type, token_hash) VALUES ($1, $2, $3, $4)',
-      [driver.id, driver.name, vehicleType, crypto.createHash('sha256').update(token).digest('hex')],
+    client = await database.connect();
+    let driverId;
+    try {
+      await client.query('BEGIN IMMEDIATE');
+      const existing = await client.query('SELECT id FROM drivers WHERE username = $1', [driverCredentials.username]);
+      if (existing.rowCount) {
+        driverId = existing.rows[0].id;
+      } else {
+        const legacy = await client.query(
+          'SELECT id FROM drivers WHERE username IS NULL AND name = $1 COLLATE NOCASE ORDER BY created_at LIMIT 1',
+          [driverCredentials.username],
+        );
+        if (legacy.rowCount) {
+          driverId = legacy.rows[0].id;
+          await client.query('UPDATE drivers SET username = $1 WHERE id = $2', [driverCredentials.username, driverId]);
+        } else {
+          driverId = crypto.randomUUID();
+          await client.query(
+            `INSERT INTO drivers (id, name, username, vehicle_type, token_hash)
+             VALUES ($1, $2, $3, 'cargo-bike', $4)`,
+            [driverId, driverCredentials.username, driverCredentials.username, tokenHash],
+          );
+        }
+      }
+      await client.query('UPDATE drivers SET token_hash = $1, online = 0 WHERE id = $2', [tokenHash, driverId]);
+      await expirePendingDriverOffers(client, driverId, new Date().toISOString());
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    const result = await database.query(
+      'SELECT id, name, vehicle_type, online FROM drivers WHERE id = $1',
+      [driverId],
     );
-    return sendJson(response, 201, { data: { driver: { ...driver, online: false }, token } });
+    const driver = result.rows[0];
+    return sendJson(response, 200, {
+      data: {
+        driver: {
+          id: driver.id,
+          name: driver.name,
+          vehicleType: driver.vehicle_type,
+          online: Boolean(driver.online),
+        },
+        token,
+      },
+    });
   } catch (error) {
-    console.error('Failed to register driver:', error);
-    return sendJson(response, 503, { error: 'Driver registration is unavailable' });
+    console.error('Failed to log in driver:', error);
+    return sendJson(response, 503, { error: 'Driver login is unavailable' });
+  }
+}
+
+async function expirePendingDriverOffers(client, driverId, now) {
+  await client.query(
+    `UPDATE driver_order_offers
+     SET status = 'expired', missed_at = CASE WHEN expires_at <= $2 THEN $2 ELSE missed_at END
+     WHERE driver_id = $1 AND status = 'pending'`,
+    [driverId, now],
+  );
+}
+
+async function logoutDriver(request, response) {
+  try {
+    const driver = await authenticateDriver(request);
+    const client = await database.connect();
+    try {
+      await client.query('BEGIN IMMEDIATE');
+      const replacementHash = crypto.createHash('sha256').update(crypto.randomUUID()).digest('hex');
+      await client.query(
+        'UPDATE drivers SET online = 0, token_hash = $1 WHERE id = $2',
+        [replacementHash, driver.id],
+      );
+      await expirePendingDriverOffers(client, driver.id, new Date().toISOString());
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    return sendJson(response, 200, { data: { loggedOut: true } });
+  } catch (error) {
+    if (error instanceof ApiError) return sendJson(response, error.status, { error: error.message });
+    console.error('Failed to log out driver:', error);
+    return sendJson(response, 503, { error: 'Driver logout is unavailable' });
   }
 }
 
@@ -412,7 +503,8 @@ async function getDriverOffers(driverId) {
     [driverId, now],
   );
   const result = await database.query(
-    `SELECT o.id, o.street, o.zip_code, o.pickup_time_slot, o.created_at AS order_created_at,
+    `SELECT o.id, o.first_name || ' ' || o.last_name AS customer_name,
+            o.street, o.zip_code, o.pickup_time_slot, o.created_at AS order_created_at,
             f.created_at AS offered_at, f.expires_at, f.missed_at, f.status,
             group_concat(i.bottle_type || ':' || i.quantity, ',') AS items
      FROM driver_order_offers f
@@ -428,7 +520,8 @@ async function getDriverOffers(driverId) {
 
 async function getMissedDriverOrders(driverId) {
   const result = await database.query(
-    `SELECT o.id, o.street, o.zip_code, o.pickup_time_slot, o.created_at AS order_created_at,
+    `SELECT o.id, o.first_name || ' ' || o.last_name AS customer_name,
+            o.street, o.zip_code, o.pickup_time_slot, o.created_at AS order_created_at,
             f.created_at AS offered_at, f.expires_at, f.missed_at,
             group_concat(i.bottle_type || ':' || i.quantity, ',') AS items
      FROM driver_order_offers f
@@ -446,6 +539,7 @@ function formatDriverOffer(row, status = row.status) {
   const address = `${row.street}, ${row.zip_code}, Germany`;
   return {
     id: row.id,
+    customerName: row.customer_name,
     address,
     pickupTimeSlot: row.pickup_time_slot,
     createdAt: row.order_created_at,
@@ -463,7 +557,8 @@ function formatDriverOffer(row, status = row.status) {
 
 async function getActiveDriverOrder(driverId) {
   const result = await database.query(
-    `SELECT o.id, o.street, o.zip_code, o.pickup_time_slot, o.created_at AS order_created_at,
+    `SELECT o.id, o.first_name || ' ' || o.last_name AS customer_name,
+            o.street, o.zip_code, o.pickup_time_slot, o.created_at AS order_created_at,
             group_concat(i.bottle_type || ':' || i.quantity, ',') AS items
      FROM pickup_orders o
      LEFT JOIN pickup_order_items i ON i.order_id = o.id
@@ -478,6 +573,7 @@ async function getActiveDriverOrder(driverId) {
   const address = `${row.street}, ${row.zip_code}, Germany`;
   return {
     id: row.id,
+    customerName: row.customer_name,
     address,
     pickupTimeSlot: row.pickup_time_slot,
     createdAt: row.order_created_at,
@@ -492,7 +588,8 @@ async function getActiveDriverOrder(driverId) {
 
 async function getCompletedDriverOrders(driverId) {
   const result = await database.query(
-    `SELECT o.id, o.street, o.zip_code, o.pickup_time_slot, o.created_at AS order_created_at,
+    `SELECT o.id, o.first_name || ' ' || o.last_name AS customer_name,
+            o.street, o.zip_code, o.pickup_time_slot, o.created_at AS order_created_at,
             o.completed_at,
             group_concat(i.bottle_type || ':' || i.quantity, ',') AS items
      FROM pickup_orders o
@@ -506,6 +603,7 @@ async function getCompletedDriverOrders(driverId) {
     const address = `${row.street}, ${row.zip_code}, Germany`;
     return {
       id: row.id,
+      customerName: row.customer_name,
       address,
       pickupTimeSlot: row.pickup_time_slot,
       createdAt: row.order_created_at,
@@ -559,15 +657,7 @@ async function setDriverPresence(request, response) {
     try {
       await client.query('BEGIN IMMEDIATE');
       await client.query('UPDATE drivers SET online = $1 WHERE id = $2', [body.online ? 1 : 0, driver.id]);
-      if (!body.online) {
-        const now = new Date().toISOString();
-        await client.query(
-          `UPDATE driver_order_offers
-           SET status = 'expired', missed_at = CASE WHEN expires_at <= $2 THEN $2 ELSE missed_at END
-           WHERE driver_id = $1 AND status = 'pending'`,
-          [driver.id, now],
-        );
-      }
+      if (!body.online) await expirePendingDriverOffers(client, driver.id, new Date().toISOString());
       await client.query('COMMIT');
     } finally {
       client.release();
@@ -790,9 +880,13 @@ async function handleRequest(request, response) {
   if (url.pathname.startsWith('/api/') && !isAllowedApiOrigin(request)) {
     return sendJson(response, 403, { error: 'Cross-origin API requests are not allowed' });
   }
-  if (url.pathname === '/api/drivers/register') {
+  if (url.pathname === '/api/drivers/login') {
     if (request.method !== 'POST') return sendJson(response, 405, { error: 'Method not allowed' });
-    return registerDriver(request, response);
+    return loginDriver(request, response);
+  }
+  if (url.pathname === '/api/drivers/logout') {
+    if (request.method !== 'POST') return sendJson(response, 405, { error: 'Method not allowed' });
+    return logoutDriver(request, response);
   }
   if (url.pathname === '/api/drivers/driverStatus') {
     if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed' });

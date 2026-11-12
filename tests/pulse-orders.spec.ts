@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { rm } from 'node:fs/promises';
@@ -194,11 +194,11 @@ test.describe('Pulse Logistics pickup orders', () => {
       'Thank you. Your doorstep Pfand pickup request has been scheduled.\n\n' +
         'A cargo bike courier will arrive during your selected window.\n\n' +
         'Selected pickup time: 10:00–11:00.\n\n' +
-        'Order reference: 1234.\n\n' +
+        'Order reference: #1234.\n\n' +
         'The payment will be sent to the IBAN you provided within 24 hours.',
     );
     await expect(page.locator('#t-step3-msg-pickup-value')).toHaveText('10:00–11:00.');
-    await expect(page.locator('#t-step3-msg-order-value')).toHaveText('1234.');
+    await expect(page.locator('#t-step3-msg-order-value')).toHaveText('#1234.');
     const paymentLine = page.locator('#t-step3-msg-payment');
     await expect(paymentLine).toHaveText(
       'The payment will be sent to the IBAN you provided within 24 hours.',
@@ -206,6 +206,8 @@ test.describe('Pulse Logistics pickup orders', () => {
     await expect(paymentLine.locator('strong')).toHaveText(['IBAN', '24 hours']);
     await expect(paymentLine.locator('strong').nth(0)).toHaveCSS('font-weight', '700');
     await page.getByRole('button', { name: 'DE', exact: true }).click();
+    await expect(page.locator('#t-step3-msg-order')).toHaveText('Auftragsnummer: ');
+    await expect(page.locator('#t-step3-msg-order-value')).toHaveText('#1234.');
     await expect(paymentLine).toHaveText(
       'Die Zahlung wird innerhalb von 24 Stunden auf die von Ihnen angegebene IBAN überwiesen.',
     );
@@ -237,6 +239,7 @@ test.describe('Pulse Logistics pickup orders', () => {
         street: 'Main Street 1',
         zipCode: '10115',
         phone: '+49 151 12345678',
+        iban: 'DE89370400440532013000',
       },
       pickupTimeSlot: '10:00-11:00',
       items: [{ type: 'pet', quantity: 2 }],
@@ -414,7 +417,14 @@ test.describe('Pulse Logistics pickup orders', () => {
     const response = await request.post('/api/orders', {
       headers: idempotencyHeaders(),
       data: {
-        customer: { firstName: 'Alex', lastName: 'Example', street: 'Main Street 1', zipCode: 'bad', phone: '+49 151 12345678' },
+        customer: {
+          firstName: 'Alex',
+          lastName: 'Example',
+          street: 'Main Street 1',
+          zipCode: 'bad',
+          phone: '+49 151 12345678',
+          iban: 'DE89370400440532013000',
+        },
         pickupTimeSlot: '10:00-11:00',
         items: [{ type: 'pet', quantity: 1 }],
       },
@@ -508,6 +518,7 @@ test.describe('Pulse Logistics pickup orders', () => {
           street: `1${'a'.repeat(199)}`,
           zipCode: '00000',
           phone: '123456',
+          iban: 'DE89370400440532013000',
         },
         pickupTimeSlot: '10:00-11:00',
         items: [{ type: 'pet', quantity: 50 }],
@@ -536,6 +547,7 @@ test.describe('Pulse Logistics pickup orders', () => {
           street: 'Main Street 1',
           zipCode: '10115',
           phone: '+49 151 12345678',
+          iban: 'DE89370400440532013000',
         },
         pickupTimeSlot: '12:00-13:00',
         items: [{ type: 'beer', quantity: 3 }],
@@ -560,6 +572,7 @@ test.describe('Pulse Logistics pickup orders', () => {
       totalRefund: '0.24',
       items: [{ type: 'beer', quantity: 3, unitRefund: 0.08 }],
     }));
+    expect(retrieved).not.toHaveProperty('iban');
     expect(retrieved).not.toHaveProperty('customer');
   });
 
@@ -608,88 +621,83 @@ test.describe('Pulse Logistics pickup orders', () => {
     let child = startServer();
     try {
       await waitForServer(child);
-      const register = async (name: string) => {
-        const response = await callApi('/api/drivers/register', 'POST', { name, vehicleType: 'cargo-bike' });
-        expect(response.status).toBe(201);
-        return response.data.data;
-      };
-      const first = await register('Courier One');
-      const second = await register('Courier Two');
+      expect((await callApi('/api/orders', 'GET')).status).toBe(200);
+      await stopServer(child);
+      const secondToken = randomUUID();
+      const secondTokenHash = createHash('sha256').update(secondToken).digest('hex');
+      const seedDriverScript = `
+        const fs = require('node:fs');
+        const initSqlJs = require('sql.js');
+        (async () => {
+          const SQL = await initSqlJs({
+            locateFile: (fileName) => require.resolve(\`sql.js/dist/\${fileName}\`),
+          });
+          const database = new SQL.Database(fs.readFileSync(process.argv[1]));
+          database.run(
+            "INSERT INTO drivers (id, name, username, vehicle_type, token_hash) VALUES (?, ?, ?, 'cargo-bike', ?)",
+            [process.argv[2], 'Courier Two', 'CourierTwo', process.argv[3]],
+          );
+          fs.writeFileSync(process.argv[1], Buffer.from(database.export()));
+        })().catch((error) => {
+          console.error(error);
+          process.exitCode = 1;
+        });
+      `;
+      execFileSync(process.execPath, [
+        '-e', seedDriverScript, databasePath, randomUUID(), secondTokenHash,
+      ], { cwd: process.cwd() });
+      child = startServer();
+      await waitForServer(child);
+
+      const invalidLogin = await callApi('/api/drivers/login', 'POST', {
+        username: 'James',
+        password: 'wrong',
+      });
+      expect(invalidLogin).toEqual({
+        status: 401,
+        data: { error: 'Invalid username or password' },
+      });
       await page.goto(`${baseUrl}/driver`);
       await expect(page.locator('.brand-title')).toHaveText('PULSE LOGISTICS');
       await expect(page.locator('.brand-mark')).toHaveCount(0);
       await expect(page.getByRole('link', { name: /Consumer app/ })).toHaveCount(0);
-      await expect(page.locator('#vehicle-type option')).toHaveText(['Lastenrad', 'Fahrrad']);
+      await expect(page.locator('#vehicle-type')).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'EN', exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'DE', exact: true })).toBeVisible();
-      await expect(page.locator('#register-title')).toHaveText('Als Fahrer registrieren');
+      await expect(page.locator('#login-title')).toHaveText('Fahrer-Anmeldung');
       await page.getByRole('button', { name: 'EN', exact: true }).click();
-      await expect(page.locator('#register-title')).toHaveText('Join as a driver');
-      await expect(page.locator('#vehicle-type option')).toHaveText(['Cargo bike', 'Bicycle']);
-      const vehicleControl = page.locator('#vehicle-type-control');
-      await expect(vehicleControl).toHaveAttribute('role', 'combobox');
-      await expect(vehicleControl).toHaveText('Cargo bike');
-      const dropdownStyle = await vehicleControl.evaluate((control) => {
-        const style = getComputedStyle(control);
-        const chevron = getComputedStyle(control, '::after');
-        const bounds = control.getBoundingClientRect();
-        const contentHeight = bounds.height - Number.parseFloat(style.borderTopWidth) -
-          Number.parseFloat(style.borderBottomWidth);
-        const chevronTop = chevron.top.endsWith('%')
-          ? Number.parseFloat(chevron.top) * contentHeight / 100
-          : Number.parseFloat(chevron.top);
-        return {
-          height: control.getBoundingClientRect().height,
-          borderRadius: style.borderRadius,
-          fontWeight: style.fontWeight,
-          position: style.position,
-          chevronRight: chevron.right,
-          chevronWidth: chevron.width,
-          chevronHeight: chevron.height,
-          chevronCentered: Math.abs(chevronTop - contentHeight / 2) <= 0.5,
-        };
-      });
-      expect(dropdownStyle.height).toBeGreaterThanOrEqual(42);
-      expect(dropdownStyle.borderRadius).toBe('12px');
-      expect(dropdownStyle.fontWeight).toBe('700');
-      expect(dropdownStyle.position).toBe('relative');
-      expect(dropdownStyle.chevronRight).toBe('15px');
-      expect(dropdownStyle.chevronWidth).toBe('8px');
-      expect(dropdownStyle.chevronHeight).toBe('8px');
-      expect(dropdownStyle.chevronCentered).toBe(true);
-      await vehicleControl.click();
-      await expect(page.locator('#vehicle-type-options')).toBeVisible();
-      const selectedOptionStyle = await page.locator('#vehicle-type-option-0').evaluate((option) => {
-        const style = getComputedStyle(option);
-        return { color: style.color, backgroundColor: style.backgroundColor };
-      });
-      expect(selectedOptionStyle).toEqual({
-        color: 'rgb(74, 141, 82)',
-        backgroundColor: 'rgb(232, 244, 229)',
-      });
-      await page.locator('#vehicle-type-option-1').click();
-      await expect(page.locator('#vehicle-type-options')).toBeHidden();
-      await expect(page.locator('#vehicle-type')).toHaveValue('bike');
-      await expect(vehicleControl).toHaveText('Bicycle');
-      await page.getByRole('button', { name: 'DE', exact: true }).click();
-      await expect(page.locator('#register-title')).toHaveText('Als Fahrer registrieren');
-      await expect(vehicleControl).toHaveText('Fahrrad');
-      await page.getByRole('button', { name: 'EN', exact: true }).click();
-      await expect(vehicleControl).toHaveText('Bicycle');
-      await page.locator('#driver-name').fill('Jacob');
-      await page.reload();
-      await expect(page.locator('#driver-name')).toHaveValue('Jacob');
+      await expect(page.locator('#login-title')).toHaveText('Driver login');
+      await page.locator('#username').fill('James');
+      await page.locator('#password').fill('wrong');
+      await page.locator('#login-button').click();
+      await expect(page.locator('#login-error')).toHaveText('Incorrect username or password.');
+      await page.locator('#password').fill('genius');
       const driverStatusResponsePromise = page.waitForResponse((response) =>
         new URL(response.url()).pathname === '/api/drivers/driverStatus');
-      await page.locator('#register-button').click();
+      await page.locator('#login-button').click();
       const driverStatusResponse = await driverStatusResponsePromise;
       expect(driverStatusResponse.status()).toBe(200);
       await expect(page.locator('#dashboard')).toBeVisible();
-      await expect(page.locator('#register-panel')).toBeHidden();
-      await expect(page.locator('#driver-profile-name')).toContainText('Jacob');
+      await expect(page.locator('#login-panel')).toBeHidden();
+      await expect(page.locator('#driver-profile-name')).toContainText('James');
+      await expect(page.locator('#logout-button')).toBeVisible();
+      await expect(page.locator('#logout-button')).toHaveCSS('background-color', 'rgb(74, 141, 82)');
+      const logoutIsAboveToggle = await page.locator('#logout-button').evaluate((button) => {
+        const buttonBounds = button.getBoundingClientRect();
+        const toggleBounds = document.querySelector('#presence-toggle')!.getBoundingClientRect();
+        return buttonBounds.bottom <= toggleBounds.top;
+      });
+      expect(logoutIsAboveToggle).toBe(true);
+      const firstToken = await page.evaluate(() => localStorage.getItem('pulse-driver-token'));
+      if (!firstToken) throw new Error('Driver login did not save its token');
+      const first = { token: firstToken };
+      const second = { token: secondToken };
       const nextDriverStatusRequest = await page.waitForRequest((request) =>
         new URL(request.url()).pathname === '/api/drivers/driverStatus', { timeout: 5000 });
       expect(nextDriverStatusRequest.method()).toBe('GET');
+      await page.reload();
+      await expect(page.locator('#dashboard')).toBeVisible();
+      await expect(page.locator('#driver-profile-name')).toContainText('James');
       for (const width of [360, 420, 1280]) {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(`${baseUrl}/driver`);
@@ -750,6 +758,7 @@ test.describe('Pulse Logistics pickup orders', () => {
           street: 'Main Street 1',
           zipCode: '10115',
           phone: '+49 151 12345678',
+          iban: 'DE89370400440532013000',
         },
         pickupTimeSlot: '12:00-13:00',
         items: [{ type: 'pet', quantity: 2 }],
@@ -763,9 +772,12 @@ test.describe('Pulse Logistics pickup orders', () => {
       const firstOffer = firstProfile.data.data.pendingOrders.find((offer: { id: string }) => offer.id === created.id);
       expect(firstOffer).toEqual(expect.objectContaining({
         id: created.id,
+        customerName: 'Map Pickup',
         address: 'Main Street 1, 10115, Germany',
         mapsUrl: 'https://www.google.com/maps/dir/?api=1&destination=Main%20Street%201%2C%2010115%2C%20Germany',
       }));
+      expect(firstOffer).not.toHaveProperty('iban');
+      expect(firstOffer).not.toHaveProperty('phone');
       expect(firstProfile.data.data.acceptedOrders).toEqual([]);
       expect(firstProfile.data.data.missedOrders).toEqual([]);
       expect(Date.parse(firstOffer.expiresAt) - Date.parse(firstOffer.offeredAt)).toBe(60_000);
@@ -795,6 +807,7 @@ test.describe('Pulse Logistics pickup orders', () => {
       });
       const targetOffer = page.locator('.offer').filter({ hasText: `Pickup #${created.id}` });
       await expect(targetOffer).toBeVisible();
+      await expect(targetOffer.getByText('Customer: Map Pickup')).toBeVisible();
       await expect(targetOffer.getByRole('progressbar')).toHaveAttribute('aria-valuemax', '60');
       await expect(targetOffer.getByRole('link', { name: /Open pickup in Google Maps/ })).toHaveAttribute(
         'href',
@@ -812,6 +825,7 @@ test.describe('Pulse Logistics pickup orders', () => {
 
       const activeCard = page.locator('.active-order').filter({ hasText: `Active pickup #${created.id}` });
       await expect(activeCard).toBeVisible();
+      await expect(activeCard.getByText('Customer: Map Pickup')).toBeVisible();
       await expect(activeCard.getByRole('button', { name: 'Complete pickup' })).toBeVisible();
       await page.reload();
       await expect(page.getByRole('heading', { name: 'Your requests' })).toBeVisible();
@@ -834,6 +848,7 @@ test.describe('Pulse Logistics pickup orders', () => {
           street: 'Second Street 2',
           zipCode: '10115',
           phone: '+49 151 12345678',
+          iban: 'DE89370400440532013000',
         },
         pickupTimeSlot: '13:00-14:00',
         items: [{ type: 'can', quantity: 1 }],
@@ -894,6 +909,7 @@ test.describe('Pulse Logistics pickup orders', () => {
           street: 'Third Street 3',
           zipCode: '10115',
           phone: '+49 151 12345678',
+          iban: 'DE89370400440532013000',
         },
         pickupTimeSlot: '14:00-15:00',
         items: [{ type: 'pet', quantity: 1 }],
@@ -947,6 +963,53 @@ test.describe('Pulse Logistics pickup orders', () => {
       expect(missedProfile.data.data.missedOrders).toEqual([
         expect.objectContaining({ id: secondOrder.id, status: 'missed', missedAt: expect.any(String) }),
       ]);
+
+      const onlineBeforeLogout = await callApi(
+        '/api/drivers/driverStatus/presence',
+        'PATCH',
+        { online: true },
+        first.token,
+      );
+      expect(onlineBeforeLogout.status).toBe(200);
+      await page.goto(`${baseUrl}/driver`);
+      await expect(page.locator('#dashboard')).toBeVisible();
+      await expect(page.locator('#logout-button')).toBeVisible();
+      await expect(page.locator('#dashboard')).toHaveCSS('animation-name', 'auth-view-enter');
+      await page.locator('#logout-button').click();
+      const logoutConfirmation = page.getByRole('dialog', { name: 'Log out?' });
+      await expect(logoutConfirmation).toBeVisible();
+      await expect(logoutConfirmation).toHaveCSS('animation-name', 'logout-confirm-in');
+      await expect(logoutConfirmation).toContainText('Are you sure you want to log out?');
+      await logoutConfirmation.getByRole('button', { name: 'No, stay logged in' }).click();
+      await expect(logoutConfirmation).toBeHidden();
+      await expect(page.locator('#dashboard')).toBeVisible();
+      expect(await page.evaluate(() => localStorage.getItem('pulse-driver-token'))).toBe(first.token);
+      expect((await callApi('/api/drivers/driverStatus', 'GET', undefined, first.token)).status).toBe(200);
+
+      await page.locator('#logout-button').click();
+      await expect(logoutConfirmation).toBeVisible();
+      const logoutResponsePromise = page.waitForResponse((response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/api/drivers/logout');
+      await logoutConfirmation.getByRole('button', { name: 'Yes, log out' }).click();
+      const logoutResponse = await logoutResponsePromise;
+      expect(logoutResponse.status()).toBe(200);
+      await expect(page.locator('#login-panel')).toBeVisible();
+      await expect(page.locator('#login-panel')).toHaveCSS('animation-name', 'auth-view-enter');
+      await expect(page.locator('#dashboard')).toBeHidden();
+      expect(await page.evaluate(() => localStorage.getItem('pulse-driver-token'))).toBeNull();
+      expect((await callApi('/api/drivers/driverStatus', 'GET', undefined, first.token)).status).toBe(401);
+
+      const reLogin = await callApi('/api/drivers/login', 'POST', {
+        username: 'James',
+        password: 'genius',
+      });
+      expect(reLogin.status).toBe(200);
+      const reLoginToken = reLogin.data.data.token;
+      const reLoginProfile = await callApi('/api/drivers/driverStatus', 'GET', undefined, reLoginToken);
+      expect(reLoginProfile.data.data.driver.online).toBe(false);
+      expect(reLoginProfile.data.data.activeOrder.id).toBe(thirdOrder.id);
+      expect(pageErrors).toEqual([]);
     } finally {
       await stopServer(child);
       await rm(databasePath, { force: true });
@@ -961,6 +1024,7 @@ test.describe('Pulse Logistics pickup orders', () => {
         street: 'Main Street 1',
         zipCode: '10115',
         phone: '+49 151 12345678',
+        iban: 'DE89370400440532013000',
       },
       pickupTimeSlot: '12:00-13:00',
       items: [{ type: 'beer', quantity: 1 }],
@@ -995,6 +1059,7 @@ test.describe('Pulse Logistics pickup orders', () => {
           street: 'Private Street 4',
           zipCode: '10115',
           phone: '+49 151 12345678',
+          iban: 'DE89370400440532013000',
         },
         pickupTimeSlot: '14:00-15:00',
         items: [{ type: 'water', quantity: 2 }],
@@ -1015,6 +1080,7 @@ test.describe('Pulse Logistics pickup orders', () => {
     }));
     expect(savedOrder).not.toHaveProperty('phone');
     expect(savedOrder).not.toHaveProperty('street');
+    expect(savedOrder).not.toHaveProperty('iban');
   });
 
   test('shows saved orders in the local order history page', async ({ page, request }) => {
@@ -1027,6 +1093,7 @@ test.describe('Pulse Logistics pickup orders', () => {
           street: 'Main Street 1',
           zipCode: '10115',
           phone: '+49 151 12345678',
+          iban: 'DE89370400440532013000',
         },
         pickupTimeSlot: '16:00-17:00',
         items: [{ type: 'can', quantity: 4 }],
@@ -1039,7 +1106,7 @@ test.describe('Pulse Logistics pickup orders', () => {
     await expect(page.getByRole('heading', { name: 'Auftragsverlauf' })).toBeVisible();
     const savedOrder = page.getByRole('article').filter({ hasText: id });
     await expect(savedOrder.getByRole('heading', { name: 'Visible Pickup' })).toBeVisible();
-    await expect(savedOrder.getByText(`Referenz: ${id}`)).toBeVisible();
+    await expect(savedOrder.getByText(`Referenz: #${id}`)).toBeVisible();
     await expect(savedOrder.getByText('4 × Aluminiumdose (€0.25 each)')).toBeVisible();
     await expect(savedOrder.getByText('16:00–17:00')).toBeVisible();
   });
@@ -1054,6 +1121,7 @@ test.describe('Pulse Logistics pickup orders', () => {
           street: 'Main Street 1',
           zipCode: '10115',
           phone: '+49 151 12345678',
+          iban: 'DE89370400440532013000',
         },
         pickupTimeSlot: '18:00-19:00',
         items: [
@@ -1123,6 +1191,7 @@ test.describe('Pulse Logistics pickup orders', () => {
         street: 'Main Street 1',
         zipCode: '10115',
         phone: '+49 151 12345678',
+        iban: 'DE89370400440532013000',
       },
       pickupTimeSlot: '10:00-11:00',
       items: [{ type: 'pet', quantity: 2 }],
@@ -1149,6 +1218,7 @@ test.describe('Pulse Logistics pickup orders', () => {
         street: 'Main Street 1',
         zipCode: '10115',
         phone: '+49 151 12345678',
+        iban: 'DE89370400440532013000',
       },
       pickupTimeSlot: '10:00-11:00',
       items: [{ type: 'pet', quantity: 1 }],
@@ -1173,6 +1243,7 @@ test.describe('Pulse Logistics pickup orders', () => {
         street: 'Main Street 1',
         zipCode: '10115',
         phone: '+49 151 12345678',
+        iban: 'DE89370400440532013000',
       },
       pickupTimeSlot: '10:00-11:00',
       items: [{ type: 'pet', quantity: 1 }],
@@ -1183,6 +1254,8 @@ test.describe('Pulse Logistics pickup orders', () => {
       { order: { ...validOrder, customer: { ...validOrder.customer, street: `Main Street\n1` } }, error: 'Street contains unsupported characters' },
       { order: { ...validOrder, customer: { ...validOrder.customer, phone: '12ab56' } }, error: 'Phone number is invalid' },
       { order: { ...validOrder, customer: { ...validOrder.customer, phone: '......' } }, error: 'Phone number is invalid' },
+      { order: { ...validOrder, customer: { ...validOrder.customer, iban: '' } }, error: 'IBAN is required and must be at most 34 characters' },
+      { order: { ...validOrder, customer: { ...validOrder.customer, iban: 'DE 89370400440532013000' } }, error: 'IBAN is invalid' },
       { order: { ...validOrder, pickupTimeSlot: '22:00-23:00' }, error: 'Pickup time slot is invalid' },
       { order: { ...validOrder, items: [{ type: 'unknown', quantity: 1 }] }, error: 'Bottle category is invalid or duplicated' },
       { order: { ...validOrder, items: [{ type: 'pet', quantity: 0 }] }, error: 'Bottle quantity must be an integer between 1 and 50' },
@@ -1396,6 +1469,7 @@ test.describe('Pulse Logistics pickup orders', () => {
             street: 'Main Street 1',
             zipCode: '10115',
             phone: '+49 151 12345678',
+            iban: 'DE89370400440532013000',
           },
           pickupTimeSlot: '10:00-11:00',
           items: [{ type: 'beer', quantity: 2 }],
@@ -1404,6 +1478,31 @@ test.describe('Pulse Logistics pickup orders', () => {
       expect(createResponse.status).toBe(201);
       const created = (await createResponse.json()).data;
       await stopServer(child);
+      const readIbanScript = `
+        const fs = require('node:fs');
+        const initSqlJs = require('sql.js');
+        (async () => {
+          const SQL = await initSqlJs({
+            locateFile: (fileName) => require.resolve(\`sql.js/dist/\${fileName}\`),
+          });
+          const database = new SQL.Database(fs.readFileSync(process.argv[1]));
+          const statement = database.prepare('SELECT iban FROM pickup_orders WHERE id = ?');
+          statement.bind([process.argv[2]]);
+          if (!statement.step()) throw new Error('Stored order was not found');
+          console.log(statement.getAsObject().iban);
+          statement.free();
+          database.close();
+        })().catch((error) => {
+          console.error(error);
+          process.exitCode = 1;
+        });
+      `;
+      const storedIban = execFileSync(
+        process.execPath,
+        ['-e', readIbanScript, databasePath, created.id],
+        { cwd: process.cwd(), encoding: 'utf8' },
+      ).trim();
+      expect(storedIban).toBe('DE89370400440532013000');
 
       child = startServer();
       await waitForServer(child);

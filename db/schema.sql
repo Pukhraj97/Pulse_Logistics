@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS pickup_orders (
   street TEXT NOT NULL CHECK (length(trim(street)) BETWEEN 1 AND 200),
   zip_code TEXT NOT NULL CHECK (length(zip_code) = 5 AND zip_code NOT GLOB '*[^0-9]*'),
   phone TEXT NOT NULL CHECK (length(trim(phone)) BETWEEN 6 AND 32),
+  iban TEXT CHECK (iban IS NULL OR length(iban) BETWEEN 15 AND 34),
   pickup_time_slot TEXT NOT NULL CHECK (
     pickup_time_slot IN (
       '10:00-11:00', '11:00-12:00', '12:00-13:00', '13:00-14:00',
@@ -37,6 +38,7 @@ CREATE TABLE IF NOT EXISTS pickup_order_items (
 CREATE TABLE IF NOT EXISTS drivers (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 100),
+  username TEXT,
   vehicle_type TEXT NOT NULL CHECK (vehicle_type IN ('cargo-bike', 'bike', 'car')),
   token_hash TEXT NOT NULL UNIQUE,
   online INTEGER NOT NULL DEFAULT 0 CHECK (online IN (0, 1)),
