@@ -284,7 +284,7 @@
             70% { transform: scale(1.12) rotate(0); }
             100% { transform: scale(1) rotate(0); }
         }
-        .qty-val { width: 45px; padding: 0; text-align: center; border: none; font-weight: 700; font-size: 1rem; background: transparent; }
+        .qty-val { width: 45px; padding: 0; text-align: center; border: none; font-weight: 700; font-size: 1rem; background: transparent; user-select: none; -webkit-user-select: none; caret-color: transparent; pointer-events: none; }
 
         .add-btn { flex: 1; min-width: 0; background: var(--primary); color: var(--white); border: none; padding: 12px; border-radius: 6px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
         .add-btn:hover { background: var(--primary-hover); }
@@ -349,6 +349,31 @@
         }
         #order-back-dialog::backdrop { background: rgba(9, 30, 66, 0.65); }
         #order-back-dialog p { margin: 0 0 20px; line-height: 1.5; }
+        #remove-item-dialog {
+            width: min(440px, calc(100vw - 32px));
+            border: none;
+            border-radius: 12px;
+            padding: 24px;
+            color: var(--text);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+        }
+        #remove-item-dialog::backdrop { background: rgba(9, 30, 66, 0.65); }
+        #remove-item-dialog h2 { margin: 0 0 8px; font-size: 1.15rem; }
+        #remove-item-dialog p { margin: 0; line-height: 1.5; }
+        .remove-confirm-icon {
+            display: grid;
+            width: 40px;
+            height: 40px;
+            margin-bottom: 14px;
+            place-items: center;
+            border-radius: 50%;
+            color: var(--danger);
+            background: #ffebe6;
+            font-size: 1.25rem;
+            font-weight: 800;
+        }
+        .remove-confirm-actions { display: flex; gap: 8px; margin-top: 22px; }
+        .remove-confirm-actions .btn { width: auto; flex: 1; }
 
         @media (min-width: 761px) and (max-width: 1024px) {
             .bg-hero { background-position: 58% center; }
@@ -452,7 +477,7 @@
         <div class="quantity-control-wrapper">
             <div class="qty-box">
                 <button class="qty-btn" onclick="adjustQty(-1, this)" aria-label="Decrease quantity">-</button>
-                <input type="text" id="qty" class="qty-val" value="1" readonly>
+                <input type="text" id="qty" class="qty-val" value="1" readonly tabindex="-1" aria-readonly="true">
                 <button class="qty-btn" onclick="adjustQty(1, this)" aria-label="Increase quantity">+</button>
             </div>
             <button class="add-btn" id="t-btn-add" onclick="addItem()">Add to Order</button>
@@ -545,6 +570,16 @@
         </form>
     </dialog>
 
+    <dialog id="remove-item-dialog" aria-labelledby="remove-item-title" aria-describedby="remove-item-message">
+        <div class="remove-confirm-icon" aria-hidden="true">!</div>
+        <h2 id="remove-item-title">Remove item?</h2>
+        <p id="remove-item-message">Are you sure you want to remove this item from your order?</p>
+        <div class="remove-confirm-actions">
+            <button id="cancel-remove-item" type="button" class="btn btn-sec">Keep item</button>
+            <button id="confirm-remove-item" type="button" class="btn">Remove item</button>
+        </div>
+    </dialog>
+
 <script>
     const translations = {
         en: {
@@ -586,6 +621,10 @@
             phoneInvalid: "Enter at least six digits and use only common phone symbols.",
             quantityLimit: "A maximum of 50 bottles per category can be ordered.",
             removeItem: "Remove item",
+            removeItemTitle: "Remove item?",
+            removeItemMessage: "Are you sure you want to remove this item from your order?",
+            removeItemCancel: "Keep item",
+            removeItemConfirm: "Remove item",
             step3MsgIntro: "Thank you. Your doorstep Pfand pickup request has been scheduled.",
             step3MsgCourier: "A cargo bike courier will arrive during your selected window.",
             btnReset: "Schedule Another Pickup",
@@ -633,6 +672,10 @@
             phoneInvalid: "Geben Sie mindestens sechs Ziffern und nur übliche Telefonsymbole ein.",
             quantityLimit: "Pro Kategorie können höchstens 50 Flaschen bestellt werden.",
             removeItem: "Artikel entfernen",
+            removeItemTitle: "Artikel entfernen?",
+            removeItemMessage: "Möchten Sie diesen Artikel wirklich aus Ihrer Bestellung entfernen?",
+            removeItemCancel: "Behalten",
+            removeItemConfirm: "Artikel entfernen",
             step3MsgIntro: "Vielen Dank. Ihre Pfandabholung wurde erfolgreich gebucht.",
             step3MsgCourier: "Ein Lastenrad-Kurier wird zum gewählten Zeitpunkt bei Ihnen sein.",
             btnReset: "Weitere Abholung Buchen",
@@ -652,6 +695,10 @@
     let selectedPickupTime = '';
     let orderId = '';
     let orderSubmissionKey = crypto.randomUUID();
+    const removeItemDialog = document.getElementById('remove-item-dialog');
+    const cancelRemoveItemButton = document.getElementById('cancel-remove-item');
+    const confirmRemoveItemButton = document.getElementById('confirm-remove-item');
+    let pendingRemoveItemId = null;
     let currentStep = 1;
     const customSelectRefreshers = new Map();
     const initialStep = history.state?.pulseStep === 2 ? 2 : 1;
@@ -832,6 +879,10 @@
         document.getElementById('t-btn-submit').innerText = t.btnSubmit;
         renderConfirmationMessage();
         document.getElementById('t-btn-reset').innerText = t.btnReset;
+        document.getElementById('remove-item-title').innerText = t.removeItemTitle;
+        document.getElementById('remove-item-message').innerText = t.removeItemMessage;
+        cancelRemoveItemButton.innerText = t.removeItemCancel;
+        confirmRemoveItemButton.innerText = t.removeItemConfirm;
         const select = document.getElementById('bottleType');
         Array.from(select.options).forEach(opt => {
             const key = opt.getAttribute('data-key');
@@ -885,6 +936,12 @@
         }));
     }
 
+    function normalizeQty(value) {
+        const numericValue = Number(value);
+        if (!Number.isFinite(numericValue)) return 1;
+        return Math.min(Math.max(Math.trunc(numericValue), 1), maxBottlesPerCategory);
+    }
+
     function adjustQty(amount, button) {
         button.style.setProperty('--qty-rotation', `${amount * 12}deg`);
         button.classList.remove('qty-animating');
@@ -893,8 +950,8 @@
         button.addEventListener('animationend', () => button.classList.remove('qty-animating'), { once: true });
 
         let qtyInput = document.getElementById('qty');
-        let current = parseInt(qtyInput.value) + amount;
-        if (current > 0 && current <= maxBottlesPerCategory) qtyInput.value = current;
+        let current = normalizeQty(Number(qtyInput.value) + amount);
+        qtyInput.value = String(current);
     }
 
     function mergeCartItem(items, newItem) {
@@ -923,7 +980,9 @@
         let select = document.getElementById('bottleType');
         let key = select.options[select.selectedIndex].getAttribute('data-key');
         let rate = bottleRates[key];
-        let qty = parseInt(document.getElementById('qty').value);
+        let qtyInput = document.getElementById('qty');
+        let qty = normalizeQty(qtyInput.value);
+        qtyInput.value = String(qty);
         const existingQuantity = cart
             .filter(item => item.key === key)
             .reduce((total, item) => total + item.qty, 0);
@@ -936,7 +995,13 @@
         cart = mergeCartItem(cart, { id: crypto.randomUUID(), key, rate, qty });
         saveAndRender();
         document.getElementById('t-cart-validation').classList.add('hidden');
-        document.getElementById('qty').value = 1;
+        qtyInput.value = 1;
+    }
+
+    function requestDeleteItem(id) {
+        if (removeItemDialog.open) return;
+        pendingRemoveItemId = id;
+        removeItemDialog.showModal();
     }
 
     function deleteItem(id) {
@@ -951,6 +1016,14 @@
             saveAndRender();
         }, 180);
     }
+
+    cancelRemoveItemButton.addEventListener('click', () => removeItemDialog.close());
+    confirmRemoveItemButton.addEventListener('click', () => {
+        const itemId = pendingRemoveItemId;
+        removeItemDialog.close();
+        if (itemId !== null) deleteItem(itemId);
+    });
+    removeItemDialog.addEventListener('close', () => { pendingRemoveItemId = null; });
 
     function saveAndRender() {
         sessionStorage.setItem('pfandCart', JSON.stringify(cart));
@@ -986,7 +1059,7 @@
             remove.type = 'button';
             remove.setAttribute('aria-label', t.removeItem);
             remove.textContent = '✕';
-            remove.addEventListener('click', () => deleteItem(item.id));
+            remove.addEventListener('click', () => requestDeleteItem(item.id));
             const actions = document.createElement('div');
             actions.append(amount, remove);
             row.append(info, actions);

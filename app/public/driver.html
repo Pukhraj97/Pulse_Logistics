@@ -88,7 +88,7 @@
       color: #102019; background: #a7f078; font: inherit; font-weight: 800; text-decoration: none;
       transition: transform .15s ease, filter .15s ease;
     }
-    button:hover, .button:hover { filter: brightness(.97); transform: translateY(-1px); }
+    button:hover, .button:hover { filter: brightness(.97); }
     button:disabled { cursor: wait; opacity: .6; transform: none; }
     .form-actions { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
     .error { min-height: 20px; margin: 12px 0 0; color: #b33434; font-size: 13px; }
@@ -410,6 +410,7 @@
     let profile;
     let pendingOrders = [];
     let activeOrder = null;
+    let renderedOffersKey = '';
     let pendingCompletion = null;
     let busy = false;
     let loggingOut = false;
@@ -459,14 +460,16 @@
       return translations[currentLang].errors[message] || message;
     }
 
-    function bindOfferActions() {
-      offersElement.querySelectorAll('[data-accept]').forEach((button) => {
-        button.addEventListener('click', () => acceptOffer(button.dataset.accept, button));
-      });
-      offersElement.querySelectorAll('[data-complete]').forEach((button) => {
-        button.addEventListener('click', () => requestCompleteOrder(button.dataset.complete, button));
-      });
-    }
+    offersElement.addEventListener('click', (event) => {
+      if (!(event.target instanceof Element)) return;
+      const button = event.target.closest('button[data-accept], button[data-complete]');
+      if (!button || !offersElement.contains(button) || button.disabled) return;
+      if (button.dataset.accept) {
+        void acceptOffer(button.dataset.accept, button);
+      } else if (button.dataset.complete) {
+        requestCompleteOrder(button.dataset.complete, button);
+      }
+    });
 
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, (character) => ({
@@ -493,6 +496,14 @@
 
     function renderOffers() {
       const t = translations[currentLang];
+      const offersKey = JSON.stringify({
+        language: currentLang,
+        online: Boolean(profile && profile.online),
+        activeOrder,
+        pendingOrders,
+      });
+      if (offersKey === renderedOffersKey) return;
+      renderedOffersKey = offersKey;
       let activeMarkup = '';
       if (activeOrder) {
         const mapsUrl = new URL(activeOrder.mapsUrl);
@@ -513,12 +524,10 @@
       }
       if (!profile.online) {
         offersElement.innerHTML = activeMarkup || `<div class="empty">${t.offlineEmpty}</div>`;
-        bindOfferActions();
         return;
       }
       if (pendingOrders.length === 0) {
         offersElement.innerHTML = activeMarkup || `<div class="empty">${t.onlineEmpty}</div>`;
-        bindOfferActions();
         return;
       }
       offersElement.innerHTML = activeMarkup + pendingOrders.map((offer) => {
@@ -541,7 +550,6 @@
             <button class="accept" type="button" data-accept="${escapeHtml(offer.id)}">${t.accept}</button></div>
         </article>`;
       }).join('');
-      bindOfferActions();
     }
 
     function updateCountdowns() {
@@ -606,6 +614,7 @@
       profile = undefined;
       pendingOrders = [];
       activeOrder = null;
+      renderedOffersKey = '';
       loginPanel.hidden = false;
       dashboard.hidden = true;
       passwordInput.value = '';

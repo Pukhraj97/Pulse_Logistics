@@ -11,13 +11,13 @@ npm install
 npm start
 ```
 
-Open <http://localhost:4174>. The main page supports English and German; add bottle categories and quantities, then enter customer details and choose a pickup time to submit an order.
+Open <http://localhost:4174>. The main page supports English and German; add bottle categories with the `−`/`+` controls, then enter customer details and choose a pickup time to submit an order. The quantity display is read-only and cannot be typed into or text-selected. Clicking the `✕` beside a cart item opens a localized confirmation dialog; the item is removed only after confirmation.
 
 Orders are stored in `app/data/pickup-orders.sqlite`. The database and `app/data` directory are created on first start, and orders persist across server restarts. The app uses `sql.js` and does not require Docker or a separate database server. Set `PORT` to change the listening port, or `PULSE_DB_PATH` to select a different database file.
 
 Open <http://localhost:4174/orders> to view the local order history. It displays the customer name, order reference, pickup time, items, refund total, and status; it does not display phone numbers or street addresses. Use **Refresh** to reload the list. The history page is available directly at `/orders` and is not linked from the main page.
 
-Open <http://localhost:4174/driver> for the Driver app. Use the **EN / DE** toggle to switch the interface between English and German. Sign in with the local demo credentials **James** / **genius**; the password stays masked with no show/hide control. Switch online to receive orders created while online. Each offer has a 60-second countdown, an accept action, and a Google Maps pickup link. 
+Open <http://localhost:4174/driver> for the Driver app. Use the **EN / DE** toggle to switch the interface between English and German. Sign in with the local demo credentials **James** / **genius**; the password stays masked with no show/hide control. Switch online to receive orders created while online. Each offer has a 60-second countdown, an accept action, and a Google Maps pickup link. Completing an active pickup and logging out require confirmation. The dashboard polls for updates every three seconds, while unchanged offers remain in place so hover, focus, and click interactions are not disrupted.
 
 ## API
 
@@ -70,7 +70,7 @@ npm test
 
 This runs the complete Playwright system suite in `tests/pulse-orders.spec.ts`. The runner starts the application on a free local port and uses `test-results/pulse-orders.sqlite`, separate from the normal order database. It runs in desktop Chromium, mobile Chromium, Firefox, desktop WebKit, and iPhone WebKit.
 
-The suite covers Consumer order creation and input validation, language switching, cart limits (1–50 per category), confirmation and payment text, order history and privacy, API error handling, idempotency and local-origin protections, and Driver login/logout, online dispatch, countdown expiry, acceptance, active-order limits, completion confirmation, missed orders, and persistence across server restarts.
+The suite covers Consumer order creation and input validation, language switching, read-only quantity controls and cart limits (1–50 per category), confirmation and payment text, order history and privacy, API error handling, idempotency and local-origin protections, and Driver login/logout, online dispatch, countdown expiry, acceptance, active-order limits, completion confirmation, missed orders, and persistence across server restarts.
 
 Install browser binaries if needed:
 

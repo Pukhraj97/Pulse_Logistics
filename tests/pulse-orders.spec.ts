@@ -39,6 +39,22 @@ test.describe('Pulse Logistics pickup orders', () => {
     await expect(increase).toHaveClass(/qty-animating/);
   });
 
+  test('normalizes invalid quantity values and keeps the cart in-range', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'EN', exact: true }).click();
+    await page.locator('#qty').evaluate((input) => { input.value = '0'; });
+    await page.getByRole('button', { name: 'Add to Order' }).click();
+    await expect(page.locator('#qty')).toHaveValue('1');
+    await expect(page.getByText('1x PET Plastic Bottle (€0.25)')).toBeVisible();
+
+    await page.evaluate(() => sessionStorage.removeItem('pfandCart'));
+    await page.reload();
+    await page.locator('#qty').evaluate((input) => { input.value = '99'; });
+    await page.getByRole('button', { name: 'Add to Order' }).click();
+    await expect(page.locator('#qty')).toHaveValue('1');
+    await expect(page.getByText('50x PET Plastic Bottle (€0.25)')).toBeVisible();
+  });
+
   test('shows two-digit quantities and caps each bottle category at 50', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto('/');
