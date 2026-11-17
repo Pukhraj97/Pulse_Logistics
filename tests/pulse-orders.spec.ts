@@ -222,6 +222,7 @@ test.describe('Pulse Logistics pickup orders', () => {
     await expect(paymentLine.locator('strong')).toHaveText(['IBAN', '24 hours']);
     await expect(paymentLine.locator('strong').nth(0)).toHaveCSS('font-weight', '700');
     await page.getByRole('button', { name: 'DE', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Bestellung bestätigt!' })).toBeVisible();
     await expect(page.locator('#t-step3-msg-order')).toHaveText('Auftragsnummer: ');
     await expect(page.locator('#t-step3-msg-order-value')).toHaveText('#1234.');
     await expect(paymentLine).toHaveText(
